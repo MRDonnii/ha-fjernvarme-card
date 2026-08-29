@@ -1,0 +1,35 @@
+{
+  "name": "ha-fjernvarme-card",
+  "version": "0.16.0",
+  "description": "Animated Home Assistant Lovelace card for a district heating (fjernvarme) substation unit.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MRDonnii/ha-fjernvarme-card.git"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "check": "tsc --noEmit"
+  },
+  "keywords": [
+    "home-assistant",
+    "home-assistant-card",
+    "custom-card",
+    "lovelace",
+    "lovelace-card",
+    "dashboard",
+    "district-heating",
+    "fjernvarme",
+    "wavin",
+    "calefa",
+    "kamstrup"
+  ],
+  "author": "John Thorn Halle",
+  "license": "MIT",
+  "devDependencies": {
+    "@vitejs/plugin-legacy": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}
