@@ -573,27 +573,31 @@ var FjernvarmeCard = class extends HTMLElement {
 	_statusCircle(entityKey, label, value, x, y, valueClass = "", large = false, ring = void 0, valueFontSizeOverride = void 0, requireEntity = true, bgColor = void 0, radiusOverride = void 0) {
 		if (requireEntity && !this._entityId(entityKey)) return "";
 		const textClass = ["status-value", valueClass].filter(Boolean).join(" ");
-		const r = radiusOverride ?? (large ? 50 : 42);
-		const ringR = r - 4;
-		const circleClass = large ? "status-circle status-circle-large" : "status-circle";
+		const w = (radiusOverride ?? (large ? 50 : 42)) * 2;
+		const half = w / 2;
+		const rx = large ? 20 : 16;
+		const ringW = w - 8;
+		const ringHalf = ringW / 2;
+		const ringRx = Math.max(rx - 4, 0);
+		const boxClass = large ? "status-circle status-circle-large" : "status-circle";
 		const rimClass = large ? "status-circle-rim status-circle-rim-large" : "status-circle-rim";
-		const glossCx = large ? -14 : -12;
-		const glossCy = large ? -21 : -19;
-		const glossRx = large ? 25 : 21;
-		const glossRy = large ? 15 : 13;
-		const labelY = large ? -10 : -8;
-		const valueY = large ? 19 : 18;
+		const glossCx = large ? -20 : -17;
+		const glossCy = large ? -28 : -24;
+		const glossRx = large ? 32 : 26;
+		const glossRy = large ? 16 : 14;
+		const labelY = large ? -18 : -15;
+		const valueY = large ? 15 : 14;
 		const valueFontSize = valueFontSizeOverride || (large ? "19px" : "16px");
 		const bgStyle = bgColor ? ` style="fill:${bgColor};"` : "";
 		return `
             <g ${this._svgEntityAttrs(entityKey)} tabindex="0" transform="translate(${x} ${y})">
-              <circle class="${circleClass}" cx="0" cy="0" r="${r}"${bgStyle}></circle>
+              <rect class="${boxClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"${bgStyle}></rect>
               <ellipse class="status-circle-gloss" cx="${glossCx}" cy="${glossCy}" rx="${glossRx}" ry="${glossRy}"></ellipse>
               ${ring ? `
-                <circle class="status-ring-bg" cx="0" cy="0" r="${ringR}"></circle>
-                <circle class="status-ring ${ring.colorClass || ""}" cx="0" cy="0" r="${ringR}" pathLength="100" stroke-dasharray="${ring.progress} 100" transform="rotate(-90 0 0)"${ring.color ? ` style="stroke:${ring.color} !important;"` : ""}></circle>
+                <rect class="status-ring-bg" x="${-ringHalf}" y="${-ringHalf}" width="${ringW}" height="${ringW}" rx="${ringRx}" pathLength="100"></rect>
+                <rect class="status-ring ${ring.colorClass || ""}" x="${-ringHalf}" y="${-ringHalf}" width="${ringW}" height="${ringW}" rx="${ringRx}" pathLength="100" stroke-dasharray="${ring.progress} 100"${ring.color ? ` style="stroke:${ring.color} !important;"` : ""}></rect>
               ` : ""}
-              <circle class="${rimClass}" cx="0" cy="0" r="${r}"></circle>
+              <rect class="${rimClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"></rect>
               <text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>
               <text x="0" y="${valueY}" text-anchor="middle" class="${textClass}" style="font-size:${valueFontSize};">${this._escapeHtml(value)}</text>
             </g>
@@ -1833,7 +1837,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.24.1-auto-standby-circle-sizing`;
+		const schemaCacheKey = `${this._language()}:0.25.0-square-status-boxes`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1852,6 +1856,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.24.1-auto-standby-circle-sizing";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.0-square-status-boxes";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
