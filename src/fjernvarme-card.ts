@@ -653,9 +653,7 @@ class FjernvarmeCard extends HTMLElement {
   _coolingStatusRing(key) {
     const info = this._coolingDeviation(key);
     if (!info) return undefined;
-    if (info.deviation > info.tolerance * 2) return { progress: 100, colorClass: "danger" };
-    if (info.deviation > info.tolerance) return { progress: 100, colorClass: "warn" };
-    return { progress: 100, colorClass: "" };
+    return { progress: 100, color: this._coolingBackgroundColor(key) };
   }
 
   _render() {
@@ -963,7 +961,7 @@ class FjernvarmeCard extends HTMLElement {
               ${circLane.gradient}
             </defs>
 
-            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), centerX - 150, topRowY, "", false, this._coolingStatusRing("primary_cooling"), undefined, true, this._coolingBackgroundColor("primary_cooling"))}
+            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), centerX - 150, topRowY, "", false, this._coolingStatusRing("primary_cooling"))}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), centerX, topRowY, "", true, this._overallRing(), undefined, false)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), centerX + 150, topRowY, "", false, this._pressureRing())}
 
@@ -1386,7 +1384,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.19.0-cooling-target-band`;
+    const schemaCacheKey = `${language}:0.19.1-cooling-ring-only`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1414,5 +1412,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.19.0-cooling-target-band";
+window.__FJERNVARME_CARD_VERSION__ = "0.19.1-cooling-ring-only";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");

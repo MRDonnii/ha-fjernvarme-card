@@ -729,19 +729,10 @@ var FjernvarmeCard = class extends HTMLElement {
 		return `rgb(${good.map((channel, index) => Math.round(channel + (bad[index] - channel) * ratio)).join(", ")})`;
 	}
 	_coolingStatusRing(key) {
-		const info = this._coolingDeviation(key);
-		if (!info) return void 0;
-		if (info.deviation > info.tolerance * 2) return {
-			progress: 100,
-			colorClass: "danger"
-		};
-		if (info.deviation > info.tolerance) return {
-			progress: 100,
-			colorClass: "warn"
-		};
+		if (!this._coolingDeviation(key)) return void 0;
 		return {
 			progress: 100,
-			colorClass: ""
+			color: this._coolingBackgroundColor(key)
 		};
 	}
 	_render() {
@@ -1043,7 +1034,7 @@ var FjernvarmeCard = class extends HTMLElement {
               ${circLane.gradient}
             </defs>
 
-            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), 160, topRowY, "", false, this._coolingStatusRing("primary_cooling"), void 0, true, this._coolingBackgroundColor("primary_cooling"))}
+            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), 160, topRowY, "", false, this._coolingStatusRing("primary_cooling"))}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), centerX, topRowY, "", true, this._overallRing(), void 0, false)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), 460, topRowY, "", false, this._pressureRing())}
 
@@ -1614,7 +1605,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.19.0-cooling-target-band`;
+		const schemaCacheKey = `${this._language()}:0.19.1-cooling-ring-only`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1633,6 +1624,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.19.0-cooling-target-band";
+window.__FJERNVARME_CARD_VERSION__ = "0.19.1-cooling-ring-only";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
