@@ -36,6 +36,10 @@ class FjernvarmeCard extends HTMLElement {
         sentio_status: findEntity(["sentio_varmekald_status"], undefined),
         sentio_call_active: findEntity(["sentio_kald_ejet"], undefined),
         sentio_fejl: findEntity(["sentio_varmekald_fejl"], undefined),
+        auto_standby_active: findEntity(["auto_standby_enabled", "automatisk_standby"], undefined),
+        auto_standby_status: findEntity(["auto_standby_status"], undefined),
+        auto_standby_engaged: findEntity(["auto_standby_active"], undefined),
+        auto_standby_fejl: findEntity(["auto_standby_fault", "auto_standby_fejl"], undefined),
         alarms: []
       },
       appearance: {
@@ -353,7 +357,15 @@ class FjernvarmeCard extends HTMLElement {
         sentio_fejl_short: "Fault",
         sentio_active_short: "Active",
         sentio_waiting_short: "Waiting",
-        sentio_no_call_short: "None"
+        sentio_no_call_short: "None",
+        auto_standby: "Auto standby",
+        auto_standby_active: "Auto standby enabled",
+        auto_standby_status: "Auto standby status",
+        auto_standby_engaged: "Auto standby holding unit",
+        auto_standby_fejl: "Auto standby fault",
+        auto_standby_fejl_short: "Fault",
+        auto_standby_active_short: "Active",
+        auto_standby_no_call_short: "None"
       },
       da: {
         primary_supply: "FJF",
@@ -385,7 +397,15 @@ class FjernvarmeCard extends HTMLElement {
         sentio_fejl_short: "Fejl",
         sentio_active_short: "Aktiv",
         sentio_waiting_short: "Venter",
-        sentio_no_call_short: "Ingen"
+        sentio_no_call_short: "Ingen",
+        auto_standby: "Auto standby",
+        auto_standby_active: "Automatisk standby aktiveret",
+        auto_standby_status: "Automatisk standby status",
+        auto_standby_engaged: "Automatisk standby holder enheden",
+        auto_standby_fejl: "Automatisk standby fejl",
+        auto_standby_fejl_short: "Fejl",
+        auto_standby_active_short: "Aktiv",
+        auto_standby_no_call_short: "Ingen"
       }
     };
     return translations[this._language()]?.[key] || translations.en[key] || key;
@@ -692,6 +712,43 @@ class FjernvarmeCard extends HTMLElement {
     `;
   }
 
+  _autoStandbyRing() {
+    if (!this._entityId("auto_standby_active")) return undefined;
+    if (!this._isOn("auto_standby_active")) return undefined;
+    if (this._isOn("auto_standby_fejl")) return { progress: 100, colorClass: "danger" };
+    if (this._isOn("auto_standby_engaged")) return { progress: 100, colorClass: "info" };
+    return { progress: 100, colorClass: "" };
+  }
+
+  // Mirrors _sentioStatusText(): main circle value is whether standby is
+  // currently being held by the automation, separate from the small on/off
+  // badge, which shows whether the feature itself is enabled.
+  _autoStandbyStatusText() {
+    if (!this._isOn("auto_standby_active")) return this._t("off");
+    if (this._isOn("auto_standby_fejl")) return this._t("auto_standby_fejl_short");
+    if (this._isOn("auto_standby_engaged")) return this._t("auto_standby_active_short");
+    if (this._entityId("auto_standby_status")) {
+      const rawStatus = this._state("auto_standby_status");
+      if (rawStatus === "Fejlsikring" || rawStatus === "Failsafe") {
+        return this._t("auto_standby_fejl_short");
+      }
+    }
+    return this._t("auto_standby_no_call_short");
+  }
+
+  _autoStandbyActiveBadge(x, y) {
+    if (!this._entityId("auto_standby_active")) return "";
+    const on = this._isOn("auto_standby_active");
+    const fill = on
+      ? "var(--success-color, #43e683)"
+      : "color-mix(in srgb, var(--fv-text) 30%, transparent)";
+    return `
+            <g transform="translate(${x} ${y})">
+              <circle cx="34" cy="34" r="9" fill="${fill}" stroke="var(--fv-background)" stroke-width="2.5"></circle>
+            </g>
+    `;
+  }
+
   _onOffRing(key, invert = false) {
     if (!this._entityId(key)) return undefined;
     const on = this._isOn(key);
@@ -773,10 +830,20 @@ class FjernvarmeCard extends HTMLElement {
     const topRowY = 56;
     const bottomRowY = 472;
     const hasSentio = !!this._entityId("sentio_active");
-    const coolingX = hasSentio ? 110 : centerX - 150;
-    const unitX = hasSentio ? centerX - 55 : centerX;
-    const sentioX = centerX + 55;
-    const pressureX = hasSentio ? 510 : centerX + 150;
+    const hasAutoStandby = !!this._entityId("auto_standby_active");
+    const hasFeatureCircle = hasSentio || hasAutoStandby;
+    const coolingX = hasFeatureCircle ? 110 : centerX - 150;
+    const pressureX = hasFeatureCircle ? 510 : centerX + 150;
+    // With both feature circles present there's no room for three large
+    // (r=50) circles between the fixed cooling/pressure positions, so unit
+    // stays large and centered while sentio/auto-standby shrink to the
+    // smaller (r=42) size used elsewhere on the card, flanking it evenly.
+    const bothFeatures = hasSentio && hasAutoStandby;
+    const unitX = bothFeatures ? centerX : hasFeatureCircle ? centerX - 55 : centerX;
+    const sentioX = bothFeatures ? centerX - 100 : centerX + 55;
+    const autoStandbyX = bothFeatures ? centerX + 100 : centerX + 55;
+    const sentioLarge = !bothFeatures;
+    const autoStandbyLarge = !bothFeatures;
 
     const primaryFlow = this._laneFlowState(["meter_flow"]);
     const chFlow = this._laneFlowState(["ch_valve"]);
@@ -1082,8 +1149,10 @@ class FjernvarmeCard extends HTMLElement {
 
             ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"))}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), undefined, false)}
-            ${this._statusCircle("sentio_active", this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing())}
+            ${this._statusCircle("sentio_active", this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", sentioLarge, this._sentioRing())}
             ${this._sentioActiveBadge(sentioX, topRowY)}
+            ${this._statusCircle("auto_standby_active", this._t("auto_standby"), this._autoStandbyStatusText(), autoStandbyX, topRowY, "", autoStandbyLarge, this._autoStandbyRing())}
+            ${this._autoStandbyActiveBadge(autoStandbyX, topRowY)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), pressureX, topRowY, "", false, this._pressureRing())}
 
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
@@ -1177,6 +1246,10 @@ class FjernvarmeCardEditor extends HTMLElement {
       sentio_status: entities.sentio_status,
       sentio_call_active: entities.sentio_call_active,
       sentio_fejl: entities.sentio_fejl,
+      auto_standby_active: entities.auto_standby_active,
+      auto_standby_status: entities.auto_standby_status,
+      auto_standby_engaged: entities.auto_standby_engaged,
+      auto_standby_fejl: entities.auto_standby_fejl,
       alarms: entities.alarms || [],
       animation: appearance.animation !== false,
       flow_animation: (appearance.flow_animation ?? appearance.animation) !== false,
@@ -1397,6 +1470,19 @@ class FjernvarmeCardEditor extends HTMLElement {
       },
       {
         type: "expandable",
+        name: "auto_standby",
+        title: this._t("auto_standby"),
+        flatten: true,
+        icon: "mdi:radiator-disabled",
+        schema: [
+          { name: "auto_standby_active", selector: { entity: { domain: "switch" } } },
+          { name: "auto_standby_status", selector: { entity: { domain: "sensor" } } },
+          { name: "auto_standby_engaged", selector: { entity: { domain: "binary_sensor" } } },
+          { name: "auto_standby_fejl", selector: { entity: { domain: "binary_sensor" } } }
+        ]
+      },
+      {
+        type: "expandable",
         name: "temperature_colors",
         title: this._t("temperature_colors"),
         flatten: true,
@@ -1468,6 +1554,10 @@ class FjernvarmeCardEditor extends HTMLElement {
       sentio_status: value.sentio_status || undefined,
       sentio_call_active: value.sentio_call_active || undefined,
       sentio_fejl: value.sentio_fejl || undefined,
+      auto_standby_active: value.auto_standby_active || undefined,
+      auto_standby_status: value.auto_standby_status || undefined,
+      auto_standby_engaged: value.auto_standby_engaged || undefined,
+      auto_standby_fejl: value.auto_standby_fejl || undefined,
       alarms: Array.isArray(value.alarms) ? value.alarms : []
     };
     next.temperature_thresholds = {
@@ -1523,7 +1613,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.23.0-bypass-junction`;
+    const schemaCacheKey = `${language}:0.24.0-auto-standby-circle`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1551,5 +1641,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.23.0-bypass-junction";
+window.__FJERNVARME_CARD_VERSION__ = "0.24.0-auto-standby-circle";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");

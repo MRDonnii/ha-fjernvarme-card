@@ -73,6 +73,10 @@ entities:
   sentio_status: sensor.heat_call_status
   sentio_call_active: input_boolean.heat_call_in_progress
   sentio_fejl: binary_sensor.heat_call_fault
+  auto_standby_active: switch.auto_standby_enabled
+  auto_standby_status: sensor.auto_standby_status
+  auto_standby_engaged: binary_sensor.auto_standby_active
+  auto_standby_fejl: binary_sensor.auto_standby_fault
   alarms:
     - binary_sensor.low_pressure_warning
     - binary_sensor.sensor_failure
@@ -115,6 +119,10 @@ any of them are active.
 | `entities.sentio_status` | Optional: a text sensor with the current status, shown on the circle when `sentio_active` is on |
 | `entities.sentio_call_active` | Optional: an `input_boolean`/`binary_sensor` marking a call as currently in progress — colors the circle's ring |
 | `entities.sentio_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
+| `entities.auto_standby_active` | Optional: a `switch` toggling an automatic-standby function. Adds a circle next to the unit circle, shown only when this is configured. When both `sentio_active` and `auto_standby_active` are configured, the unit circle stays centered and both feature circles shrink to fit alongside it |
+| `entities.auto_standby_status` | Optional: a text sensor with the current status, shown on the circle when `auto_standby_active` is on |
+| `entities.auto_standby_engaged` | Optional: a `binary_sensor` marking that standby is currently being held by the automation — colors the circle's ring |
+| `entities.auto_standby_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
 | `entities.alarms` | List of `binary_sensor` entities aggregated into the unit's alarm ring/count |
 | `appearance.flow_animation` | Toggle the animated flow dashes |
 | `appearance.show_labels` / `show_temperatures` | Toggle label/temperature text |
