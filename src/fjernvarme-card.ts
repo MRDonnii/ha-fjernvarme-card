@@ -190,7 +190,7 @@ class FjernvarmeCard extends HTMLElement {
   }
 
   _diagramHeight() {
-    return 510;
+    return 522;
   }
 
   _cardHeightForWidth(width) {
@@ -590,22 +590,28 @@ class FjernvarmeCard extends HTMLElement {
     };
   }
 
-  // A small recirculation/bypass loop hanging off a lane's own pipe, rather
-  // than a full separate lane - animates only while the given status entity
-  // reports on (e.g. the DHW circulation pump running). Deliberately thinner
-  // and simpler than a full lane pipe: it's a secondary detail, not another
-  // primary flow.
-  _bypassLoop(id, xStart, xEnd, mainY, dipY, tempKey, statusKey, duration, stopped) {
+  // A small recirculation/bypass loop tapped onto the outer edge of a lane's
+  // own pipe (not crossing through its centerline), rather than a full
+  // separate lane. Only rendered at all while the given status entity
+  // reports on (e.g. the DHW circulation pump running) - unlike the main
+  // lanes it doesn't stay visible-but-muted, since it's a "sometimes this
+  // happens" branch, not a permanent circuit.
+  _bypassLoop(id, xStart, xEnd, pipeY, pipeEdgeOffset, dipDepth, tempKey, statusKey, duration, stopped) {
+    if (stopped) return "";
     if (!this._entityId(statusKey) && !this._entityId(tempKey)) return "";
+    const junctionY = pipeY + pipeEdgeOffset;
+    const dipY = junctionY + dipDepth;
     const midX = (xStart + xEnd) / 2;
-    const path = `M${xStart} ${mainY} Q ${xStart} ${dipY} ${midX} ${dipY} Q ${xEnd} ${dipY} ${xEnd} ${mainY}`;
+    const path = `M${xStart} ${junctionY} Q ${xStart} ${dipY} ${midX} ${dipY} Q ${xEnd} ${dipY} ${xEnd} ${junctionY}`;
     const temp = this._number(tempKey);
     const color = Number.isFinite(temp) ? this._temperatureColor(temp) : "var(--fv-muted)";
-    const stoppedClass = stopped ? " stopped" : "";
+    const junctionColor = "color-mix(in srgb, var(--fv-text) 30%, transparent)";
     return `
               <g class="bypass-loop">
                 <path class="bypass-duct-bg" d="${path}"></path>
-                <path class="bypass-flow${stoppedClass}" stroke="${color}" style="--bypass-duration:${duration};" d="${path}"></path>
+                <path class="bypass-flow" stroke="${color}" style="--bypass-duration:${duration};" d="${path}"></path>
+                <circle cx="${xStart}" cy="${junctionY}" r="4" fill="${junctionColor}"></circle>
+                <circle cx="${xEnd}" cy="${junctionY}" r="4" fill="${junctionColor}"></circle>
               </g>
     `;
   }
@@ -760,9 +766,12 @@ class FjernvarmeCard extends HTMLElement {
     const laneY1 = 154;
     const laneY2 = 234;
     const laneY3 = 314;
-    const bypassDipY = laneY3 + 58;
+    // Tap the loop onto the DHW pipe's outer edge, not its centerline.
+    const bypassEdgeOffset = 27;
+    const bypassDipDepth = 46;
+    const bypassDipY = laneY3 + bypassEdgeOffset + bypassDipDepth;
     const topRowY = 56;
-    const bottomRowY = 460;
+    const bottomRowY = 472;
     const hasSentio = !!this._entityId("sentio_active");
     const coolingX = hasSentio ? 110 : centerX - 150;
     const unitX = hasSentio ? centerX - 55 : centerX;
@@ -792,7 +801,7 @@ class FjernvarmeCard extends HTMLElement {
     const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped, flowReversed);
     const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped, flowReversed);
     const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, dhwSides.leftKey, dhwSides.rightKey, dhwFlow.duration, dhwFlow.stopped, flowReversed);
-    const bypassLoop = this._bypassLoop(`${this._id}-bypass`, 190, 430, laneY3, bypassDipY, "circulation_bypass_temp", "circulation_status", bypassFlow.duration, bypassFlow.stopped);
+    const bypassLoop = this._bypassLoop(`${this._id}-bypass`, 190, 430, laneY3, bypassEdgeOffset, bypassDipDepth, "circulation_bypass_temp", "circulation_status", bypassFlow.duration, bypassFlow.stopped);
 
     const laneBox = (key, label, x, y, align) => {
       if (!this._entityId(key)) return "";
@@ -928,12 +937,6 @@ class FjernvarmeCard extends HTMLElement {
           opacity: .95;
           animation: fv-airflow var(--bypass-duration, 3.4s) linear infinite;
           transition: stroke .5s ease, opacity .5s ease;
-        }
-
-        .bypass-flow.stopped {
-          stroke: color-mix(in srgb, var(--fv-text) 26%, transparent) !important;
-          opacity: .4;
-          animation: none;
         }
 
         .no-animation .bypass-flow {
@@ -1520,7 +1523,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.22.1-bypass-loop-thin`;
+    const schemaCacheKey = `${language}:0.23.0-bypass-junction`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1548,5 +1551,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.22.1-bypass-loop-thin";
+window.__FJERNVARME_CARD_VERSION__ = "0.23.0-bypass-junction";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");

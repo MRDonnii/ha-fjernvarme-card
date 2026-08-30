@@ -17,9 +17,9 @@ renders as a plain gray pipe. Status circles across the top and bottom show unit
 temperature, each with a color-coded ring.
 
 The DHW circulation/bypass loop (the recirculation line that keeps hot-water pipes warm)
-is drawn as a small animated loop hanging off the domestic-hot-water pipe itself, rather
-than as a separate lane — it lights up and animates only while the circulation pump is
-actually running.
+is drawn as a small loop tapped onto the domestic-hot-water pipe's own edge, rather than
+as a separate lane — unlike the main lanes, the loop itself only appears while the
+circulation pump is actually running; its status badge stays visible either way.
 
 ## Installation
 
