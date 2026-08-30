@@ -644,16 +644,13 @@ var FjernvarmeCard = class extends HTMLElement {
 	}
 	_bypassLoop(id, xStart, xEnd, mainY, dipY, tempKey, statusKey, duration, stopped) {
 		if (!this._entityId(statusKey) && !this._entityId(tempKey)) return "";
-		const path = `M${xStart} ${mainY} C ${xStart} ${dipY}, ${xEnd} ${dipY}, ${xEnd} ${mainY}`;
+		const path = `M${xStart} ${mainY} Q ${xStart} ${dipY} ${(xStart + xEnd) / 2} ${dipY} Q ${xEnd} ${dipY} ${xEnd} ${mainY}`;
 		const temp = this._number(tempKey);
 		const color = Number.isFinite(temp) ? this._temperatureColor(temp) : "var(--fv-muted)";
-		const stoppedClass = stopped ? " stopped" : "";
 		return `
-              <g>
-                <path class="duct-bg" d="${path}"></path>
-                <path class="flow-glow${stoppedClass}" stroke="${color}" d="${path}"></path>
-                <path class="flow${stoppedClass}" stroke="${color}" d="${path}"></path>
-                ${this._airLines(path, duration, stopped, false)}
+              <g class="bypass-loop">
+                <path class="bypass-duct-bg" d="${path}"></path>
+                <path class="bypass-flow${stopped ? " stopped" : ""}" stroke="${color}" style="--bypass-duration:${duration};" d="${path}"></path>
               </g>
     `;
 	}
@@ -974,6 +971,33 @@ var FjernvarmeCard = class extends HTMLElement {
         .fv-air-line.stopped {
           animation: none;
           opacity: .16;
+        }
+
+        .bypass-duct-bg {
+          fill: none;
+          stroke: color-mix(in srgb, var(--fv-text) 20%, transparent);
+          stroke-width: 18px;
+          stroke-linecap: round;
+        }
+
+        .bypass-flow {
+          fill: none;
+          stroke-width: 10px;
+          stroke-linecap: round;
+          stroke-dasharray: 9 13;
+          opacity: .95;
+          animation: fv-airflow var(--bypass-duration, 3.4s) linear infinite;
+          transition: stroke .5s ease, opacity .5s ease;
+        }
+
+        .bypass-flow.stopped {
+          stroke: color-mix(in srgb, var(--fv-text) 26%, transparent) !important;
+          opacity: .4;
+          animation: none;
+        }
+
+        .no-animation .bypass-flow {
+          animation: none;
         }
 
         @keyframes fv-airflow {
@@ -1716,7 +1740,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.22.0-bypass-loop`;
+		const schemaCacheKey = `${this._language()}:0.22.1-bypass-loop-thin`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1735,6 +1759,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.22.0-bypass-loop";
+window.__FJERNVARME_CARD_VERSION__ = "0.22.1-bypass-loop-thin";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion

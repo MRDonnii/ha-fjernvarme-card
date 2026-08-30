@@ -592,19 +592,20 @@ class FjernvarmeCard extends HTMLElement {
 
   // A small recirculation/bypass loop hanging off a lane's own pipe, rather
   // than a full separate lane - animates only while the given status entity
-  // reports on (e.g. the DHW circulation pump running).
+  // reports on (e.g. the DHW circulation pump running). Deliberately thinner
+  // and simpler than a full lane pipe: it's a secondary detail, not another
+  // primary flow.
   _bypassLoop(id, xStart, xEnd, mainY, dipY, tempKey, statusKey, duration, stopped) {
     if (!this._entityId(statusKey) && !this._entityId(tempKey)) return "";
-    const path = `M${xStart} ${mainY} C ${xStart} ${dipY}, ${xEnd} ${dipY}, ${xEnd} ${mainY}`;
+    const midX = (xStart + xEnd) / 2;
+    const path = `M${xStart} ${mainY} Q ${xStart} ${dipY} ${midX} ${dipY} Q ${xEnd} ${dipY} ${xEnd} ${mainY}`;
     const temp = this._number(tempKey);
     const color = Number.isFinite(temp) ? this._temperatureColor(temp) : "var(--fv-muted)";
     const stoppedClass = stopped ? " stopped" : "";
     return `
-              <g>
-                <path class="duct-bg" d="${path}"></path>
-                <path class="flow-glow${stoppedClass}" stroke="${color}" d="${path}"></path>
-                <path class="flow${stoppedClass}" stroke="${color}" d="${path}"></path>
-                ${this._airLines(path, duration, stopped, false)}
+              <g class="bypass-loop">
+                <path class="bypass-duct-bg" d="${path}"></path>
+                <path class="bypass-flow${stoppedClass}" stroke="${color}" style="--bypass-duration:${duration};" d="${path}"></path>
               </g>
     `;
   }
@@ -910,6 +911,33 @@ class FjernvarmeCard extends HTMLElement {
         .fv-air-line.stopped {
           animation: none;
           opacity: .16;
+        }
+
+        .bypass-duct-bg {
+          fill: none;
+          stroke: color-mix(in srgb, var(--fv-text) 20%, transparent);
+          stroke-width: 18px;
+          stroke-linecap: round;
+        }
+
+        .bypass-flow {
+          fill: none;
+          stroke-width: 10px;
+          stroke-linecap: round;
+          stroke-dasharray: 9 13;
+          opacity: .95;
+          animation: fv-airflow var(--bypass-duration, 3.4s) linear infinite;
+          transition: stroke .5s ease, opacity .5s ease;
+        }
+
+        .bypass-flow.stopped {
+          stroke: color-mix(in srgb, var(--fv-text) 26%, transparent) !important;
+          opacity: .4;
+          animation: none;
+        }
+
+        .no-animation .bypass-flow {
+          animation: none;
         }
 
         @keyframes fv-airflow {
@@ -1492,7 +1520,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.22.0-bypass-loop`;
+    const schemaCacheKey = `${language}:0.22.1-bypass-loop-thin`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1520,5 +1548,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.22.0-bypass-loop";
+window.__FJERNVARME_CARD_VERSION__ = "0.22.1-bypass-loop-thin";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
