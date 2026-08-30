@@ -1,6 +1,6 @@
 {
   "name": "ha-fjernvarme-card",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "description": "Animated Home Assistant Lovelace card for a district heating (fjernvarme) substation unit.",
   "type": "module",
   "repository": {

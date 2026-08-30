@@ -338,7 +338,7 @@ class FjernvarmeCard extends HTMLElement {
         circulation_temp: "Circ.",
         cooling: "Cooling",
         pressure: "Pressure",
-        unit: "Unit",
+        unit: "Calefa",
         alarms: "Alarms",
         standby: "Standby",
         vacation: "Vacation",
@@ -376,7 +376,7 @@ class FjernvarmeCard extends HTMLElement {
         circulation_temp: "Cirk.",
         cooling: "Afkøling",
         pressure: "Tryk",
-        unit: "Enhed",
+        unit: "Calefa",
         alarms: "Alarmer",
         standby: "Standby",
         vacation: "Ferie",
@@ -541,6 +541,16 @@ class FjernvarmeCard extends HTMLElement {
     const valueY = large ? 15 : 14;
     const valueFontSize = valueFontSizeOverride || (large ? "19px" : "16px");
     const bgStyle = bgColor ? ` style="fill:${bgColor};"` : "";
+    // A label with a space wraps onto two lines once it's long enough that
+    // one line would run close to the box edge (e.g. "Auto standby") -
+    // shifted up a touch and the value nudged down to keep both centered
+    // as a block instead of the label crowding the value underneath it.
+    const spaceIndex = label.indexOf(" ");
+    const wrapLabel = spaceIndex > 0 && label.length > 10;
+    const labelMarkup = wrapLabel
+      ? `<text x="0" y="${labelY - 5}" text-anchor="middle" class="status-label"><tspan x="0" dy="0">${this._escapeHtml(label.slice(0, spaceIndex))}</tspan><tspan x="0" dy="10">${this._escapeHtml(label.slice(spaceIndex + 1))}</tspan></text>`
+      : `<text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>`;
+    const adjustedValueY = wrapLabel ? valueY + 5 : valueY;
     return `
             <g ${this._svgEntityAttrs(entityKey)} tabindex="0" transform="translate(${x} ${y})">
               <rect class="${boxClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"${bgStyle}></rect>
@@ -550,8 +560,8 @@ class FjernvarmeCard extends HTMLElement {
                 <rect class="status-ring ${ring.colorClass || ""}" x="${-ringHalf}" y="${-ringHalf}" width="${ringW}" height="${ringW}" rx="${ringRx}" pathLength="100" stroke-dasharray="${ring.progress} 100"${ring.color ? ` style="stroke:${ring.color} !important;"` : ""}></rect>
               ` : ""}
               <rect class="${rimClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"></rect>
-              <text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>
-              <text x="0" y="${valueY}" text-anchor="middle" class="${textClass}" style="font-size:${valueFontSize};">${this._escapeHtml(value)}</text>
+              ${labelMarkup}
+              <text x="0" y="${adjustedValueY}" text-anchor="middle" class="${textClass}" style="font-size:${valueFontSize};">${this._escapeHtml(value)}</text>
             </g>
     `;
   }
@@ -1621,7 +1631,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.25.0-square-status-boxes`;
+    const schemaCacheKey = `${language}:0.25.1-label-wrap-calefa-rename`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1649,5 +1659,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.25.0-square-status-boxes";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.1-label-wrap-calefa-rename";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");

@@ -316,7 +316,7 @@ var FjernvarmeCard = class extends HTMLElement {
 				circulation_temp: "Circ.",
 				cooling: "Cooling",
 				pressure: "Pressure",
-				unit: "Unit",
+				unit: "Calefa",
 				alarms: "Alarms",
 				standby: "Standby",
 				vacation: "Vacation",
@@ -354,7 +354,7 @@ var FjernvarmeCard = class extends HTMLElement {
 				circulation_temp: "Cirk.",
 				cooling: "Afkøling",
 				pressure: "Tryk",
-				unit: "Enhed",
+				unit: "Calefa",
 				alarms: "Alarmer",
 				standby: "Standby",
 				vacation: "Ferie",
@@ -589,6 +589,10 @@ var FjernvarmeCard = class extends HTMLElement {
 		const valueY = large ? 15 : 14;
 		const valueFontSize = valueFontSizeOverride || (large ? "19px" : "16px");
 		const bgStyle = bgColor ? ` style="fill:${bgColor};"` : "";
+		const spaceIndex = label.indexOf(" ");
+		const wrapLabel = spaceIndex > 0 && label.length > 10;
+		const labelMarkup = wrapLabel ? `<text x="0" y="${labelY - 5}" text-anchor="middle" class="status-label"><tspan x="0" dy="0">${this._escapeHtml(label.slice(0, spaceIndex))}</tspan><tspan x="0" dy="10">${this._escapeHtml(label.slice(spaceIndex + 1))}</tspan></text>` : `<text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>`;
+		const adjustedValueY = wrapLabel ? valueY + 5 : valueY;
 		return `
             <g ${this._svgEntityAttrs(entityKey)} tabindex="0" transform="translate(${x} ${y})">
               <rect class="${boxClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"${bgStyle}></rect>
@@ -598,8 +602,8 @@ var FjernvarmeCard = class extends HTMLElement {
                 <rect class="status-ring ${ring.colorClass || ""}" x="${-ringHalf}" y="${-ringHalf}" width="${ringW}" height="${ringW}" rx="${ringRx}" pathLength="100" stroke-dasharray="${ring.progress} 100"${ring.color ? ` style="stroke:${ring.color} !important;"` : ""}></rect>
               ` : ""}
               <rect class="${rimClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"></rect>
-              <text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>
-              <text x="0" y="${valueY}" text-anchor="middle" class="${textClass}" style="font-size:${valueFontSize};">${this._escapeHtml(value)}</text>
+              ${labelMarkup}
+              <text x="0" y="${adjustedValueY}" text-anchor="middle" class="${textClass}" style="font-size:${valueFontSize};">${this._escapeHtml(value)}</text>
             </g>
     `;
 	}
@@ -1837,7 +1841,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.25.0-square-status-boxes`;
+		const schemaCacheKey = `${this._language()}:0.25.1-label-wrap-calefa-rename`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1856,6 +1860,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.25.0-square-status-boxes";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.1-label-wrap-calefa-rename";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
