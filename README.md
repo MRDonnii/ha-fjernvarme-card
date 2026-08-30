@@ -119,7 +119,7 @@ any of them are active.
 | `entities.sentio_status` | Optional: a text sensor with the current status, shown on the circle when `sentio_active` is on |
 | `entities.sentio_call_active` | Optional: an `input_boolean`/`binary_sensor` marking a call as currently in progress — colors the circle's ring |
 | `entities.sentio_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
-| `entities.auto_standby_active` | Optional: a `switch` toggling an automatic-standby function. Adds a circle next to the unit circle, shown only when this is configured. When both `sentio_active` and `auto_standby_active` are configured, the unit circle stays centered and both feature circles shrink to fit alongside it |
+| `entities.auto_standby_active` | Optional: a `switch` toggling an automatic-standby function. Adds a box next to the unit box, shown only when this is configured. When both `sentio_active` and `auto_standby_active` are configured, the unit box stays centered at full size and the cooling/pressure boxes shrink slightly instead to make room |
 | `entities.auto_standby_status` | Optional: a text sensor with the current status, shown on the circle when `auto_standby_active` is on |
 | `entities.auto_standby_engaged` | Optional: a `binary_sensor` marking that standby is currently being held by the automation — colors the circle's ring |
 | `entities.auto_standby_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |

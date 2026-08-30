@@ -716,19 +716,6 @@ class FjernvarmeCard extends HTMLElement {
     return this._t("on");
   }
 
-  _sentioActiveBadge(x, y) {
-    if (!this._entityId("sentio_active")) return "";
-    const on = this._isOn("sentio_active");
-    const fill = on
-      ? "var(--success-color, #43e683)"
-      : "color-mix(in srgb, var(--fv-text) 30%, transparent)";
-    return `
-            <g transform="translate(${x} ${y})">
-              <circle cx="34" cy="34" r="9" fill="${fill}" stroke="var(--fv-background)" stroke-width="2.5"></circle>
-            </g>
-    `;
-  }
-
   _autoStandbyRing() {
     if (!this._entityId("auto_standby_active")) return undefined;
     if (!this._isOn("auto_standby_active")) return undefined;
@@ -737,9 +724,8 @@ class FjernvarmeCard extends HTMLElement {
     return { progress: 100, colorClass: "" };
   }
 
-  // Mirrors _sentioStatusText(): main circle value is whether standby is
-  // currently being held by the automation, separate from the small on/off
-  // badge, which shows whether the feature itself is enabled.
+  // Mirrors _sentioStatusText(): "Til" means the feature is enabled but not
+  // currently doing anything; the other states name what it's doing.
   _autoStandbyStatusText() {
     if (!this._isOn("auto_standby_active")) return this._t("off");
     if (this._isOn("auto_standby_fejl")) return this._t("auto_standby_fejl_short");
@@ -751,19 +737,6 @@ class FjernvarmeCard extends HTMLElement {
       }
     }
     return this._t("on");
-  }
-
-  _autoStandbyActiveBadge(x, y) {
-    if (!this._entityId("auto_standby_active")) return "";
-    const on = this._isOn("auto_standby_active");
-    const fill = on
-      ? "var(--success-color, #43e683)"
-      : "color-mix(in srgb, var(--fv-text) 30%, transparent)";
-    return `
-            <g transform="translate(${x} ${y})">
-              <circle cx="34" cy="34" r="9" fill="${fill}" stroke="var(--fv-background)" stroke-width="2.5"></circle>
-            </g>
-    `;
   }
 
   _onOffRing(key, invert = false) {
@@ -1172,9 +1145,7 @@ class FjernvarmeCard extends HTMLElement {
             ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"), undefined, true, undefined, coolingRadius)}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), undefined, false)}
             ${this._statusCircle("sentio_active", this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing())}
-            ${this._sentioActiveBadge(sentioX, topRowY)}
             ${this._statusCircle("auto_standby_active", this._t("auto_standby"), this._autoStandbyStatusText(), autoStandbyX, topRowY, "", true, this._autoStandbyRing())}
-            ${this._autoStandbyActiveBadge(autoStandbyX, topRowY)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), pressureX, topRowY, "", false, this._pressureRing(), undefined, true, undefined, pressureRadius)}
 
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
@@ -1635,7 +1606,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.25.2-grow-cooling-pressure-boxes`;
+    const schemaCacheKey = `${language}:0.25.3-remove-on-off-badge`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1663,5 +1634,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.25.2-grow-cooling-pressure-boxes";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.3-remove-on-off-badge";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");

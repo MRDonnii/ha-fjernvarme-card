@@ -764,14 +764,6 @@ var FjernvarmeCard = class extends HTMLElement {
 		}
 		return this._t("on");
 	}
-	_sentioActiveBadge(x, y) {
-		if (!this._entityId("sentio_active")) return "";
-		return `
-            <g transform="translate(${x} ${y})">
-              <circle cx="34" cy="34" r="9" fill="${this._isOn("sentio_active") ? "var(--success-color, #43e683)" : "color-mix(in srgb, var(--fv-text) 30%, transparent)"}" stroke="var(--fv-background)" stroke-width="2.5"></circle>
-            </g>
-    `;
-	}
 	_autoStandbyRing() {
 		if (!this._entityId("auto_standby_active")) return void 0;
 		if (!this._isOn("auto_standby_active")) return void 0;
@@ -797,14 +789,6 @@ var FjernvarmeCard = class extends HTMLElement {
 			if (rawStatus === "Fejlsikring" || rawStatus === "Failsafe") return this._t("auto_standby_fejl_short");
 		}
 		return this._t("on");
-	}
-	_autoStandbyActiveBadge(x, y) {
-		if (!this._entityId("auto_standby_active")) return "";
-		return `
-            <g transform="translate(${x} ${y})">
-              <circle cx="34" cy="34" r="9" fill="${this._isOn("auto_standby_active") ? "var(--success-color, #43e683)" : "color-mix(in srgb, var(--fv-text) 30%, transparent)"}" stroke="var(--fv-background)" stroke-width="2.5"></circle>
-            </g>
-    `;
 	}
 	_onOffRing(key, invert = false) {
 		if (!this._entityId(key)) return void 0;
@@ -1206,9 +1190,7 @@ var FjernvarmeCard = class extends HTMLElement {
             ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"), void 0, true, void 0, coolingRadius)}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), void 0, false)}
             ${this._statusCircle("sentio_active", this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing())}
-            ${this._sentioActiveBadge(sentioX, topRowY)}
             ${this._statusCircle("auto_standby_active", this._t("auto_standby"), this._autoStandbyStatusText(), autoStandbyX, topRowY, "", true, this._autoStandbyRing())}
-            ${this._autoStandbyActiveBadge(autoStandbyX, topRowY)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), pressureX, topRowY, "", false, this._pressureRing(), void 0, true, void 0, pressureRadius)}
 
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
@@ -1841,7 +1823,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.25.2-grow-cooling-pressure-boxes`;
+		const schemaCacheKey = `${this._language()}:0.25.3-remove-on-off-badge`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1860,6 +1842,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.25.2-grow-cooling-pressure-boxes";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.3-remove-on-off-badge";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
