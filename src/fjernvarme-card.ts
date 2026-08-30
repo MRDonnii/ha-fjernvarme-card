@@ -39,7 +39,8 @@ class FjernvarmeCard extends HTMLElement {
         flow_animation: true,
         show_labels: true,
         show_temperatures: true,
-        compact: false
+        compact: false,
+        swap_sides: false
       },
       temperature_thresholds: {
         white: 5,
@@ -655,10 +656,22 @@ class FjernvarmeCard extends HTMLElement {
     const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
     const circFlow = this._laneFlowState(["circulation_status"]);
 
-    const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, "primary_supply", "primary_return", primaryFlow.duration, primaryFlow.stopped);
-    const chLane = this._lanePipe(gCh, 110, 510, laneY2, "ch_return", "ch_supply", chFlow.duration, chFlow.stopped);
-    const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, "dhw_cold_in", "dhw_hot_out", dhwFlow.duration, dhwFlow.stopped);
-    const circLane = this._lanePipe(gCirc, 110, 510, laneY4, "circulation_bypass_temp", "circulation_temp", circFlow.duration, circFlow.stopped);
+    // Return/cold-in always on the left, supply/hot-out always on the right,
+    // consistently across every lane. `swap_sides` flips all four at once.
+    const swapSides = this._config?.appearance?.swap_sides === true;
+    const sides = (leftKey, leftLabel, rightKey, rightLabel) => swapSides
+      ? { leftKey: rightKey, leftLabel: rightLabel, rightKey: leftKey, rightLabel: leftLabel }
+      : { leftKey, leftLabel, rightKey, rightLabel };
+
+    const primarySides = sides("primary_return", this._t("primary_return"), "primary_supply", this._t("primary_supply"));
+    const chSides = sides("ch_return", this._t("ch_return"), "ch_supply", this._t("ch_supply"));
+    const dhwSides = sides("dhw_cold_in", this._t("dhw_cold_in"), "dhw_hot_out", this._t("dhw_hot_out"));
+    const circSides = sides("circulation_bypass_temp", this._t("circulation_bypass_temp"), "circulation_temp", this._t("circulation_temp"));
+
+    const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped);
+    const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped);
+    const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, dhwSides.leftKey, dhwSides.rightKey, dhwFlow.duration, dhwFlow.stopped);
+    const circLane = this._lanePipe(gCirc, 110, 510, laneY4, circSides.leftKey, circSides.rightKey, circFlow.duration, circFlow.stopped);
 
     const laneBox = (key, label, x, y, align) => {
       if (!this._entityId(key)) return "";
@@ -917,23 +930,23 @@ class FjernvarmeCard extends HTMLElement {
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), centerX, topRowY, "", true, this._overallRing(), undefined, false)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), centerX + 150, topRowY, "", false, this._pressureRing())}
 
-            ${laneBox("primary_supply", this._t("primary_supply"), 5, laneY1, "left")}
-            ${laneBox("primary_return", this._t("primary_return"), 515, laneY1, "right")}
+            ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
+            ${laneBox(primarySides.rightKey, primarySides.rightLabel, 515, laneY1, "right")}
             ${primaryLane.markup}
             ${this._laneBadgeSvg("primary_cooling", 310, laneY1, "exchanger", this._formatWithUnit("primary_cooling", 1, ""), this._coolingBackgroundColor("primary_cooling"))}
 
-            ${laneBox("ch_return", this._t("ch_return"), 5, laneY2, "left")}
-            ${laneBox("ch_supply", this._t("ch_supply"), 515, laneY2, "right")}
+            ${laneBox(chSides.leftKey, chSides.leftLabel, 5, laneY2, "left")}
+            ${laneBox(chSides.rightKey, chSides.rightLabel, 515, laneY2, "right")}
             ${chLane.markup}
             ${this._laneBadgeSvg("ch_valve", 310, laneY2, "radiator", this._formatNumber("ch_valve", 0, "%"))}
 
-            ${laneBox("dhw_cold_in", this._t("dhw_cold_in"), 5, laneY3, "left")}
-            ${laneBox("dhw_hot_out", this._t("dhw_hot_out"), 515, laneY3, "right")}
+            ${laneBox(dhwSides.leftKey, dhwSides.leftLabel, 5, laneY3, "left")}
+            ${laneBox(dhwSides.rightKey, dhwSides.rightLabel, 515, laneY3, "right")}
             ${dhwLane.markup}
             ${this._laneBadgeSvg("dhw_flow", 310, laneY3, "droplet", this._formatWithUnit("dhw_flow", 0, ""))}
 
-            ${laneBox("circulation_bypass_temp", this._t("circulation_bypass_temp"), 5, laneY4, "left")}
-            ${laneBox("circulation_temp", this._t("circulation_temp"), 515, laneY4, "right")}
+            ${laneBox(circSides.leftKey, circSides.leftLabel, 5, laneY4, "left")}
+            ${laneBox(circSides.rightKey, circSides.rightLabel, 515, laneY4, "right")}
             ${circLane.markup}
             ${this._laneBadgeSvg("circulation_status", 310, laneY4, "pump", this._isOn("circulation_status") ? this._t("on") : this._t("off"))}
 
@@ -1010,6 +1023,7 @@ class FjernvarmeCardEditor extends HTMLElement {
       show_labels: appearance.show_labels !== false,
       show_temperatures: appearance.show_temperatures !== false,
       compact: appearance.compact === true,
+      swap_sides: appearance.swap_sides === true,
       threshold_white: thresholds.white ?? 5,
       threshold_blue: thresholds.blue ?? 20,
       threshold_green: thresholds.green ?? 35,
@@ -1063,6 +1077,7 @@ class FjernvarmeCardEditor extends HTMLElement {
         show_labels: "Show labels",
         show_temperatures: "Show temperatures",
         compact: "Compact",
+        swap_sides: "Swap left/right (supply ↔ return)",
         temperature_colors: "Temperature colors",
         threshold_white: "White from",
         threshold_blue: "Blue from",
@@ -1108,6 +1123,7 @@ class FjernvarmeCardEditor extends HTMLElement {
         show_labels: "Vis labels",
         show_temperatures: "Vis temperaturer",
         compact: "Kompakt",
+        swap_sides: "Byt om på venstre/højre (frem ↔ retur)",
         temperature_colors: "Temperaturfarver",
         threshold_white: "Hvid fra",
         threshold_blue: "Blå fra",
@@ -1225,7 +1241,8 @@ class FjernvarmeCardEditor extends HTMLElement {
           { name: "flow_animation", selector: { boolean: {} } },
           { name: "show_labels", selector: { boolean: {} } },
           { name: "show_temperatures", selector: { boolean: {} } },
-          { name: "compact", selector: { boolean: {} } }
+          { name: "compact", selector: { boolean: {} } },
+          { name: "swap_sides", selector: { boolean: {} } }
         ]
       }
     ];
@@ -1284,7 +1301,8 @@ class FjernvarmeCardEditor extends HTMLElement {
       flow_animation: value.flow_animation !== false,
       show_labels: value.show_labels !== false,
       show_temperatures: value.show_temperatures !== false,
-      compact: value.compact === true
+      compact: value.compact === true,
+      swap_sides: value.swap_sides === true
     };
     Object.keys(next.entities).forEach((key) => {
       if (next.entities[key] === undefined) delete next.entities[key];
@@ -1317,7 +1335,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.16.0-outdoor-temp-ring`;
+    const schemaCacheKey = `${language}:0.17.0-consistent-sides`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1345,5 +1363,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.16.0-outdoor-temp-ring";
+window.__FJERNVARME_CARD_VERSION__ = "0.17.0-consistent-sides";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
