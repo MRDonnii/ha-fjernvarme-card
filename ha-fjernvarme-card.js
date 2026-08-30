@@ -742,7 +742,7 @@ var FjernvarmeCard = class extends HTMLElement {
 		};
 		const primarySides = sides("primary_return", this._t("primary_return"), "primary_supply", this._t("primary_supply"));
 		const chSides = sides("ch_return", this._t("ch_return"), "ch_supply", this._t("ch_supply"));
-		const dhwSides = sides("dhw_cold_in", this._t("dhw_cold_in"), "dhw_hot_out", this._t("dhw_hot_out"));
+		const dhwSides = sides("dhw_hot_out", this._t("dhw_hot_out"), "dhw_cold_in", this._t("dhw_cold_in"));
 		const circSides = sides("circulation_bypass_temp", this._t("circulation_bypass_temp"), "circulation_temp", this._t("circulation_temp"));
 		const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped);
 		const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped);
@@ -1539,7 +1539,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.17.0-consistent-sides`;
+		const schemaCacheKey = `${this._language()}:0.17.1-dhw-supply-side`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1558,6 +1558,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.17.0-consistent-sides";
+window.__FJERNVARME_CARD_VERSION__ = "0.17.1-dhw-supply-side";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
