@@ -80,6 +80,9 @@ temperature_thresholds:
   yellow: 45
   orange: 55
   red: 65
+cooling_target:
+  optimal: 30
+  tolerance: 5
 ```
 
 All `entities` keys are optional — any pipe, badge, or status circle whose entity isn't
@@ -94,6 +97,7 @@ any of them are active.
 | `entities.primary_supply` / `primary_return` | District heating supply/return temperature |
 | `entities.primary_cooling` | Cooling / ΔT reading, also drives the AFKØLING circle's background gradient |
 | `entities.pressure` | System pressure |
+| `cooling_target.optimal` / `tolerance` | The target ΔT (default 30°C) and +/- band (default 5°C) considered "normal" — the AFKØLING circle is green inside that band and fades to red the further outside it the reading sits, in either direction |
 | `entities.meter_energy_total` / `meter_volume_total` / `meter_flow` | Billing meter totals |
 | `entities.ch_supply` / `ch_return` / `ch_valve` / `ch_outdoor` / `ch_pump` | Central heating (radiator) circuit |
 | `entities.dhw_cold_in` / `dhw_hot_out` / `dhw_flow` / `dhw_valve` / `dhw_setpoint` / `dhw_status` | Domestic hot water circuit |

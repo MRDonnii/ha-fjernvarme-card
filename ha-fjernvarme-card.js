@@ -54,6 +54,10 @@ var FjernvarmeCard = class extends HTMLElement {
 				yellow: 45,
 				orange: 55,
 				red: 65
+			},
+			cooling_target: {
+				optimal: 30,
+				tolerance: 5
 			}
 		};
 	}
@@ -124,6 +128,11 @@ var FjernvarmeCard = class extends HTMLElement {
 				orange: 55,
 				red: 65,
 				...config.temperature_thresholds || {}
+			},
+			cooling_target: {
+				optimal: 30,
+				tolerance: 5,
+				...config.cooling_target || {}
 			},
 			appearance: {
 				animation: true,
@@ -691,21 +700,49 @@ var FjernvarmeCard = class extends HTMLElement {
 			color: this._temperatureColor(value)
 		};
 	}
-	_coolingBackgroundColor(key, low = 0, high = 30) {
+	_coolingDeviation(key) {
 		const value = this._number(key);
 		if (!Number.isFinite(value)) return void 0;
-		const ratio = Math.max(0, Math.min(1, (value - low) / Math.max(.1, high - low)));
-		const red = [
-			176,
-			58,
-			58
+		const target = this._config?.cooling_target || {};
+		const optimal = Number.isFinite(target.optimal) ? target.optimal : 30;
+		return {
+			value,
+			optimal,
+			tolerance: Number.isFinite(target.tolerance) && target.tolerance > 0 ? target.tolerance : 5,
+			deviation: Math.abs(value - optimal)
+		};
+	}
+	_coolingBackgroundColor(key) {
+		const info = this._coolingDeviation(key);
+		if (!info) return void 0;
+		const ratio = Math.max(0, Math.min(1, (info.deviation - info.tolerance) / (info.tolerance * 2)));
+		const good = [
+			67,
+			160,
+			71
 		];
-		const blue = [
-			47,
-			108,
-			190
+		const bad = [
+			219,
+			68,
+			55
 		];
-		return `rgb(${red.map((channel, index) => Math.round(channel + (blue[index] - channel) * ratio)).join(", ")})`;
+		return `rgb(${good.map((channel, index) => Math.round(channel + (bad[index] - channel) * ratio)).join(", ")})`;
+	}
+	_coolingStatusRing(key) {
+		const info = this._coolingDeviation(key);
+		if (!info) return void 0;
+		if (info.deviation > info.tolerance * 2) return {
+			progress: 100,
+			colorClass: "danger"
+		};
+		if (info.deviation > info.tolerance) return {
+			progress: 100,
+			colorClass: "warn"
+		};
+		return {
+			progress: 100,
+			colorClass: ""
+		};
 	}
 	_render() {
 		if (!this.shadowRoot || !this._config) return;
@@ -1006,7 +1043,7 @@ var FjernvarmeCard = class extends HTMLElement {
               ${circLane.gradient}
             </defs>
 
-            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), 160, topRowY, "", false, this._numericActivityRing("primary_cooling", .5), void 0, true, this._coolingBackgroundColor("primary_cooling"))}
+            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), 160, topRowY, "", false, this._coolingStatusRing("primary_cooling"), void 0, true, this._coolingBackgroundColor("primary_cooling"))}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), centerX, topRowY, "", true, this._overallRing(), void 0, false)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), 460, topRowY, "", false, this._pressureRing())}
 
@@ -1068,10 +1105,13 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 		const entities = this._config?.entities || {};
 		const appearance = this._config?.appearance || {};
 		const thresholds = this._config?.temperature_thresholds || {};
+		const coolingTarget = this._config?.cooling_target || {};
 		return {
 			primary_supply: entities.primary_supply,
 			primary_return: entities.primary_return,
 			primary_cooling: entities.primary_cooling,
+			cooling_optimal: coolingTarget.optimal ?? 30,
+			cooling_tolerance: coolingTarget.tolerance ?? 5,
 			pressure: entities.pressure,
 			meter_energy_total: entities.meter_energy_total,
 			meter_volume_total: entities.meter_volume_total,
@@ -1117,6 +1157,8 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 				primary_supply: "Primary supply (FJF)",
 				primary_return: "Primary return (FJR)",
 				primary_cooling: "Cooling / ΔT",
+				cooling_optimal: "Optimal cooling (ΔT)",
+				cooling_tolerance: "Normal range (+/-)",
 				pressure: "System pressure",
 				meter: "Billing meter",
 				meter_energy_total: "Total energy",
@@ -1163,6 +1205,8 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 				primary_supply: "Fjernvarme frem (FJF)",
 				primary_return: "Fjernvarme retur (FJR)",
 				primary_cooling: "Afkøling / ΔT",
+				cooling_optimal: "Optimal afkøling (ΔT)",
+				cooling_tolerance: "Normalområde (+/-)",
 				pressure: "Anlægstryk",
 				meter: "Afregningsmåler",
 				meter_energy_total: "Total energi",
@@ -1227,6 +1271,26 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 					{
 						name: "primary_cooling",
 						selector: { entity: { domain: "sensor" } }
+					},
+					{
+						name: "cooling_optimal",
+						selector: { number: {
+							min: 0,
+							max: 80,
+							step: .5,
+							mode: "box",
+							unit_of_measurement: "°C"
+						} }
+					},
+					{
+						name: "cooling_tolerance",
+						selector: { number: {
+							min: .5,
+							max: 40,
+							step: .5,
+							mode: "box",
+							unit_of_measurement: "°C"
+						} }
 					},
 					{
 						name: "pressure",
@@ -1509,6 +1573,11 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			orange: thresholdValue("threshold_orange", 55),
 			red: thresholdValue("threshold_red", 65)
 		};
+		next.cooling_target = {
+			...next.cooling_target || {},
+			optimal: thresholdValue("cooling_optimal", 30),
+			tolerance: thresholdValue("cooling_tolerance", 5)
+		};
 		next.appearance = {
 			...next.appearance || {},
 			flow_animation: value.flow_animation !== false,
@@ -1545,7 +1614,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.18.0-default-swap-flow-dir`;
+		const schemaCacheKey = `${this._language()}:0.19.0-cooling-target-band`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1564,6 +1633,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.18.0-default-swap-flow-dir";
+window.__FJERNVARME_CARD_VERSION__ = "0.19.0-cooling-target-band";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
