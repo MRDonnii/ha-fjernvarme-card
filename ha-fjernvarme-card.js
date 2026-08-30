@@ -330,7 +330,8 @@ var FjernvarmeCard = class extends HTMLElement {
 				sentio_fejl: "Heat call fault",
 				sentio_fejl_short: "Fault",
 				sentio_active_short: "Active",
-				sentio_waiting_short: "Waiting"
+				sentio_waiting_short: "Waiting",
+				sentio_no_call_short: "None"
 			},
 			da: {
 				primary_supply: "FJF",
@@ -361,7 +362,8 @@ var FjernvarmeCard = class extends HTMLElement {
 				sentio_fejl: "Varmekald fejl",
 				sentio_fejl_short: "Fejl",
 				sentio_active_short: "Aktiv",
-				sentio_waiting_short: "Venter"
+				sentio_waiting_short: "Venter",
+				sentio_no_call_short: "Ingen"
 			}
 		};
 		return translations[this._language()]?.[key] || translations.en[key] || key;
@@ -712,19 +714,21 @@ var FjernvarmeCard = class extends HTMLElement {
 	}
 	_sentioStatusText() {
 		if (!this._isOn("sentio_active")) return this._t("off");
-		const rawStatus = this._entityId("sentio_status") ? this._state("sentio_status") : void 0;
-		const shortStatus = {
-			"Deaktiveret": this._t("off"),
-			"Fejlsikring": this._t("sentio_fejl_short"),
-			"Intet svar fra Calefa": this._t("sentio_fejl_short"),
-			"Varmekald aktivt": this._t("sentio_active_short"),
-			"Standby": this._t("standby"),
-			"Intet behov": this._t("on"),
-			"Venter": this._t("sentio_waiting_short")
-		}[rawStatus];
-		if (shortStatus) return shortStatus;
-		if (rawStatus) return rawStatus;
-		return this._isOn("sentio_call_active") ? this._t("sentio_active_short") : this._t("on");
+		if (this._isOn("sentio_fejl")) return this._t("sentio_fejl_short");
+		if (this._isOn("sentio_call_active")) return this._t("sentio_active_short");
+		if (this._entityId("sentio_status")) {
+			const rawStatus = this._state("sentio_status");
+			if (rawStatus === "Fejlsikring" || rawStatus === "Intet svar fra Calefa") return this._t("sentio_fejl_short");
+		}
+		return this._t("sentio_no_call_short");
+	}
+	_sentioActiveBadge(x, y) {
+		if (!this._entityId("sentio_active")) return "";
+		return `
+            <g transform="translate(${x} ${y})">
+              <circle cx="34" cy="34" r="9" fill="${this._isOn("sentio_active") ? "var(--success-color, #43e683)" : "color-mix(in srgb, var(--fv-text) 30%, transparent)"}" stroke="var(--fv-background)" stroke-width="2.5"></circle>
+            </g>
+    `;
 	}
 	_onOffRing(key, invert = false) {
 		if (!this._entityId(key)) return void 0;
@@ -1094,6 +1098,7 @@ var FjernvarmeCard = class extends HTMLElement {
             ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"))}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), void 0, false)}
             ${this._statusCircle("sentio_active", this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing())}
+            ${this._sentioActiveBadge(sentioX, topRowY)}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), pressureX, topRowY, "", false, this._pressureRing())}
 
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
@@ -1696,7 +1701,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.20.1-sentio-label-fix`;
+		const schemaCacheKey = `${this._language()}:0.21.0-sentio-call-badge`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1715,6 +1720,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.20.1-sentio-label-fix";
+window.__FJERNVARME_CARD_VERSION__ = "0.21.0-sentio-call-badge";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
