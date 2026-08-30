@@ -768,9 +768,15 @@ var FjernvarmeCard = class extends HTMLElement {
 			deviation: Math.abs(value - optimal)
 		};
 	}
+	_primaryHasFlow() {
+		if (!this._entityId("meter_flow")) return true;
+		const flow = this._number("meter_flow");
+		return Number.isFinite(flow) ? flow > 0 : true;
+	}
 	_coolingBackgroundColor(key) {
 		const info = this._coolingDeviation(key);
 		if (!info) return void 0;
+		if (!this._primaryHasFlow()) return "var(--fv-muted)";
 		const ratio = Math.max(0, Math.min(1, (info.deviation - info.tolerance) / (info.tolerance * 2)));
 		const good = [
 			67,
@@ -1701,7 +1707,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.21.0-sentio-call-badge`;
+		const schemaCacheKey = `${this._language()}:0.21.1-cooling-flow-neutral`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1720,6 +1726,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.21.0-sentio-call-badge";
+window.__FJERNVARME_CARD_VERSION__ = "0.21.1-cooling-flow-neutral";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
