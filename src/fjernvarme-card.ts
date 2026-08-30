@@ -40,7 +40,7 @@ class FjernvarmeCard extends HTMLElement {
         show_labels: true,
         show_temperatures: true,
         compact: false,
-        swap_sides: false
+        swap_sides: true
       },
       temperature_thresholds: {
         white: 5,
@@ -447,17 +447,18 @@ class FjernvarmeCard extends HTMLElement {
     return anyActive ? { duration: "3.4s", stopped: false } : { duration: "0s", stopped: true };
   }
 
-  _airLines(path, duration, stopped) {
+  _airLines(path, duration, stopped, reversed = false) {
     const variants = [
       { offset: -8, width: 2.4, alpha: .8, dash: 22, gap: 90, flowDelay: -.2, waveDelay: -.7, wave: 2.4 },
       { offset: 0, width: 2, alpha: .7, dash: 16, gap: 70, flowDelay: -1.2, waveDelay: -1.8, wave: 2.8 },
       { offset: 8, width: 2.2, alpha: .75, dash: 20, gap: 100, flowDelay: -1.9, waveDelay: -1.1, wave: 2.6 }
     ];
     const durationSeconds = Number.parseFloat(duration);
+    const reverseClass = reversed ? " reverse" : "";
     return variants.map((variant) => `
               <g class="fv-air-band ${stopped ? "stopped" : ""}" style="--air-wave:${variant.wave}px; animation-delay:${this._phaseDelay(9.4, variant.waveDelay)};">
                 <path
-                  class="fv-air-line ${stopped ? "stopped" : ""}"
+                  class="fv-air-line${reverseClass} ${stopped ? "stopped" : ""}"
                   style="--flow-duration:${duration}; --air-alpha:${variant.alpha}; --air-flow-delay:${this._phaseDelay(durationSeconds, variant.flowDelay)};"
                   stroke-width="${variant.width}"
                   stroke-dasharray="${variant.dash} ${variant.gap}"
@@ -527,7 +528,7 @@ class FjernvarmeCard extends HTMLElement {
     `;
   }
 
-  _lanePipe(id, x1, x2, y, fromKey, toKey, duration, stopped) {
+  _lanePipe(id, x1, x2, y, fromKey, toKey, duration, stopped, reversed = false) {
     const path = `M${x1} ${y} H${x2}`;
     const fromValue = this._number(fromKey);
     const toValue = this._number(toKey);
@@ -552,7 +553,7 @@ class FjernvarmeCard extends HTMLElement {
                 <path class="duct-bg" d="${path}"></path>
                 <path class="flow-glow${stoppedClass}" stroke="url(#${id})" d="${path}"></path>
                 <path class="flow${stoppedClass}" stroke="url(#${id})" d="${path}"></path>
-                ${this._airLines(path, duration, stopped)}
+                ${this._airLines(path, duration, stopped, reversed)}
               </g>
       `
     };
@@ -656,9 +657,13 @@ class FjernvarmeCard extends HTMLElement {
     const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
     const circFlow = this._laneFlowState(["circulation_status"]);
 
-    // Return/cold-in always on the left, supply/hot-out always on the right,
-    // consistently across every lane. `swap_sides` flips all four at once.
-    const swapSides = this._config?.appearance?.swap_sides === true;
+    // Supply always on the same side, return always on the other, consistently
+    // across every lane. `swap_sides` flips all four at once; supply/cold-in on
+    // the left is the default. The air-flow animation direction is tied to the
+    // same flag so the dashes always travel supply -> return, whichever side
+    // that ends up being.
+    const swapSides = this._config?.appearance?.swap_sides !== false;
+    const flowReversed = !swapSides;
     const sides = (leftKey, leftLabel, rightKey, rightLabel) => swapSides
       ? { leftKey: rightKey, leftLabel: rightLabel, rightKey: leftKey, rightLabel: leftLabel }
       : { leftKey, leftLabel, rightKey, rightLabel };
@@ -668,10 +673,10 @@ class FjernvarmeCard extends HTMLElement {
     const dhwSides = sides("dhw_hot_out", this._t("dhw_hot_out"), "dhw_cold_in", this._t("dhw_cold_in"));
     const circSides = sides("circulation_bypass_temp", this._t("circulation_bypass_temp"), "circulation_temp", this._t("circulation_temp"));
 
-    const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped);
-    const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped);
-    const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, dhwSides.leftKey, dhwSides.rightKey, dhwFlow.duration, dhwFlow.stopped);
-    const circLane = this._lanePipe(gCirc, 110, 510, laneY4, circSides.leftKey, circSides.rightKey, circFlow.duration, circFlow.stopped);
+    const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped, flowReversed);
+    const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped, flowReversed);
+    const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, dhwSides.leftKey, dhwSides.rightKey, dhwFlow.duration, dhwFlow.stopped, flowReversed);
+    const circLane = this._lanePipe(gCirc, 110, 510, laneY4, circSides.leftKey, circSides.rightKey, circFlow.duration, circFlow.stopped, flowReversed);
 
     const laneBox = (key, label, x, y, align) => {
       if (!this._entityId(key)) return "";
@@ -777,6 +782,10 @@ class FjernvarmeCard extends HTMLElement {
           opacity: var(--air-alpha, .72);
           animation: fv-airflow var(--flow-duration, 3.4s) linear infinite;
           animation-delay: var(--air-flow-delay, 0s);
+        }
+
+        .fv-air-line.reverse {
+          animation-direction: reverse;
         }
 
         .no-animation .fv-air-line {
@@ -1023,7 +1032,7 @@ class FjernvarmeCardEditor extends HTMLElement {
       show_labels: appearance.show_labels !== false,
       show_temperatures: appearance.show_temperatures !== false,
       compact: appearance.compact === true,
-      swap_sides: appearance.swap_sides === true,
+      swap_sides: appearance.swap_sides !== false,
       threshold_white: thresholds.white ?? 5,
       threshold_blue: thresholds.blue ?? 20,
       threshold_green: thresholds.green ?? 35,
@@ -1302,7 +1311,7 @@ class FjernvarmeCardEditor extends HTMLElement {
       show_labels: value.show_labels !== false,
       show_temperatures: value.show_temperatures !== false,
       compact: value.compact === true,
-      swap_sides: value.swap_sides === true
+      swap_sides: value.swap_sides !== false
     };
     Object.keys(next.entities).forEach((key) => {
       if (next.entities[key] === undefined) delete next.entities[key];
@@ -1335,7 +1344,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.17.1-dhw-supply-side`;
+    const schemaCacheKey = `${language}:0.18.0-default-swap-flow-dir`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1363,5 +1372,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.17.1-dhw-supply-side";
+window.__FJERNVARME_CARD_VERSION__ = "0.18.0-default-swap-flow-dir";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
