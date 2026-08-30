@@ -37,6 +37,10 @@ var FjernvarmeCard = class extends HTMLElement {
 				circulation_bypass_temp: findEntity(["bypass_temperatur"], void 0),
 				standby: findEntity(["standby"], void 0),
 				vacation: findEntity(["ferie", "vacation"], void 0),
+				sentio_active: findEntity(["sentio_varmekald_aktiv"], void 0),
+				sentio_status: findEntity(["sentio_varmekald_status"], void 0),
+				sentio_call_active: findEntity(["sentio_kald_ejet"], void 0),
+				sentio_fejl: findEntity(["sentio_varmekald_fejl"], void 0),
 				alarms: []
 			},
 			appearance: {
@@ -318,7 +322,15 @@ var FjernvarmeCard = class extends HTMLElement {
 				fault: "Alarm",
 				off: "Off",
 				on: "On",
-				meter_summary: "Meter"
+				meter_summary: "Meter",
+				sentio: "Heat call",
+				sentio_active: "Heat call enabled",
+				sentio_status: "Heat call status",
+				sentio_call_active: "Heat call in progress",
+				sentio_fejl: "Heat call fault",
+				sentio_fejl_short: "Fault",
+				sentio_active_short: "Active",
+				sentio_waiting_short: "Waiting"
 			},
 			da: {
 				primary_supply: "FJF",
@@ -341,7 +353,15 @@ var FjernvarmeCard = class extends HTMLElement {
 				fault: "Alarm",
 				off: "Fra",
 				on: "Til",
-				meter_summary: "Måler"
+				meter_summary: "Måler",
+				sentio: "Varmekald",
+				sentio_active: "Varmekald aktiveret",
+				sentio_status: "Varmekald status",
+				sentio_call_active: "Varmekald i gang",
+				sentio_fejl: "Varmekald fejl",
+				sentio_fejl_short: "Fejl",
+				sentio_active_short: "Aktiv",
+				sentio_waiting_short: "Venter"
 			}
 		};
 		return translations[this._language()]?.[key] || translations.en[key] || key;
@@ -674,6 +694,38 @@ var FjernvarmeCard = class extends HTMLElement {
 		if (this._isOn("standby")) return this._t("standby");
 		return this._t("ok");
 	}
+	_sentioRing() {
+		if (!this._entityId("sentio_active")) return void 0;
+		if (!this._isOn("sentio_active")) return void 0;
+		if (this._isOn("sentio_fejl")) return {
+			progress: 100,
+			colorClass: "danger"
+		};
+		if (this._isOn("sentio_call_active")) return {
+			progress: 100,
+			colorClass: "info"
+		};
+		return {
+			progress: 100,
+			colorClass: ""
+		};
+	}
+	_sentioStatusText() {
+		if (!this._isOn("sentio_active")) return this._t("off");
+		const rawStatus = this._entityId("sentio_status") ? this._state("sentio_status") : void 0;
+		const shortStatus = {
+			"Deaktiveret": this._t("off"),
+			"Fejlsikring": this._t("sentio_fejl_short"),
+			"Intet svar fra Calefa": this._t("sentio_fejl_short"),
+			"Varmekald aktivt": this._t("sentio_active_short"),
+			"Standby": this._t("standby"),
+			"Intet behov": this._t("ok"),
+			"Venter": this._t("sentio_waiting_short")
+		}[rawStatus];
+		if (shortStatus) return shortStatus;
+		if (rawStatus) return rawStatus;
+		return this._isOn("sentio_call_active") ? this._t("sentio_active_short") : this._t("ok");
+	}
 	_onOffRing(key, invert = false) {
 		if (!this._entityId(key)) return void 0;
 		const on = this._isOn(key);
@@ -753,6 +805,11 @@ var FjernvarmeCard = class extends HTMLElement {
 		const laneY4 = 394;
 		const topRowY = 56;
 		const bottomRowY = 482;
+		const hasSentio = !!this._entityId("sentio_active");
+		const coolingX = hasSentio ? 110 : 160;
+		const unitX = hasSentio ? 255 : centerX;
+		const sentioX = 365;
+		const pressureX = hasSentio ? 510 : 460;
 		const primaryFlow = this._laneFlowState(["meter_flow"]);
 		const chFlow = this._laneFlowState(["ch_valve"]);
 		const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
@@ -1034,9 +1091,10 @@ var FjernvarmeCard = class extends HTMLElement {
               ${circLane.gradient}
             </defs>
 
-            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), 160, topRowY, "", false, this._coolingStatusRing("primary_cooling"))}
-            ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), centerX, topRowY, "", true, this._overallRing(), void 0, false)}
-            ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), 460, topRowY, "", false, this._pressureRing())}
+            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"))}
+            ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), void 0, false)}
+            ${this._statusCircle("sentio_active", this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing())}
+            ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), pressureX, topRowY, "", false, this._pressureRing())}
 
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
             ${laneBox(primarySides.rightKey, primarySides.rightLabel, 515, laneY1, "right")}
@@ -1123,6 +1181,10 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			circulation_bypass_temp: entities.circulation_bypass_temp,
 			standby: entities.standby,
 			vacation: entities.vacation,
+			sentio_active: entities.sentio_active,
+			sentio_status: entities.sentio_status,
+			sentio_call_active: entities.sentio_call_active,
+			sentio_fejl: entities.sentio_fejl,
 			alarms: entities.alarms || [],
 			animation: appearance.animation !== false,
 			flow_animation: (appearance.flow_animation ?? appearance.animation) !== false,
@@ -1419,6 +1481,31 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			},
 			{
 				type: "expandable",
+				name: "sentio",
+				title: this._t("sentio"),
+				flatten: true,
+				icon: "mdi:radiator",
+				schema: [
+					{
+						name: "sentio_active",
+						selector: { entity: { domain: "input_boolean" } }
+					},
+					{
+						name: "sentio_status",
+						selector: { entity: { domain: "sensor" } }
+					},
+					{
+						name: "sentio_call_active",
+						selector: { entity: { domain: "input_boolean" } }
+					},
+					{
+						name: "sentio_fejl",
+						selector: { entity: { domain: "binary_sensor" } }
+					}
+				]
+			},
+			{
+				type: "expandable",
 				name: "temperature_colors",
 				title: this._t("temperature_colors"),
 				flatten: true,
@@ -1553,6 +1640,10 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			circulation_bypass_temp: value.circulation_bypass_temp || void 0,
 			standby: value.standby || void 0,
 			vacation: value.vacation || void 0,
+			sentio_active: value.sentio_active || void 0,
+			sentio_status: value.sentio_status || void 0,
+			sentio_call_active: value.sentio_call_active || void 0,
+			sentio_fejl: value.sentio_fejl || void 0,
 			alarms: Array.isArray(value.alarms) ? value.alarms : []
 		};
 		next.temperature_thresholds = {
@@ -1605,7 +1696,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.19.1-cooling-ring-only`;
+		const schemaCacheKey = `${this._language()}:0.20.0-sentio-circle`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1624,6 +1715,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.19.1-cooling-ring-only";
+window.__FJERNVARME_CARD_VERSION__ = "0.20.0-sentio-circle";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion

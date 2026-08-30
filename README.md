@@ -65,6 +65,10 @@ entities:
   circulation_bypass_temp: sensor.circulation_bypass_temperature
   standby: switch.unit_standby
   vacation: switch.unit_vacation
+  sentio_active: input_boolean.heat_call_enabled
+  sentio_status: sensor.heat_call_status
+  sentio_call_active: input_boolean.heat_call_in_progress
+  sentio_fejl: binary_sensor.heat_call_fault
   alarms:
     - binary_sensor.low_pressure_warning
     - binary_sensor.sensor_failure
@@ -103,6 +107,10 @@ any of them are active.
 | `entities.dhw_cold_in` / `dhw_hot_out` / `dhw_flow` / `dhw_valve` / `dhw_setpoint` / `dhw_status` | Domestic hot water circuit |
 | `entities.circulation_temp` / `circulation_status` / `circulation_bypass_temp` | DHW circulation/recirculation loop |
 | `entities.standby` / `vacation` | Switch entities shown as status circles |
+| `entities.sentio_active` | Optional: an `input_boolean` (or similar) toggling an external heat-call function. Adds a large circle next to the unit circle, shown only when this is configured |
+| `entities.sentio_status` | Optional: a text sensor with the current status, shown on the circle when `sentio_active` is on |
+| `entities.sentio_call_active` | Optional: an `input_boolean`/`binary_sensor` marking a call as currently in progress — colors the circle's ring |
+| `entities.sentio_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
 | `entities.alarms` | List of `binary_sensor` entities aggregated into the unit's alarm ring/count |
 | `appearance.flow_animation` | Toggle the animated flow dashes |
 | `appearance.show_labels` / `show_temperatures` | Toggle label/temperature text |
