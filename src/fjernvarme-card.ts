@@ -855,8 +855,12 @@ class FjernvarmeCard extends HTMLElement {
     // for cooling/pressure to stay their usual size too when all three
     // middle circles are large, so they shrink a little instead (they only
     // ever show a short number, so it doesn't cost them any readability).
-    const coolingRadius = bothFeatures ? 36 : undefined;
-    const pressureRadius = bothFeatures ? 36 : undefined;
+    // 36 was the tightest fit that left zero overlap risk against the
+    // neighboring large box; "AFKØLING" (8 characters, no space to wrap
+    // on) turned out to need more room than that at 11px. There's 9px of
+    // clearance to spare at the current positions, so 40 still leaves 5px.
+    const coolingRadius = bothFeatures ? 40 : undefined;
+    const pressureRadius = bothFeatures ? 40 : undefined;
     const coolingX = hasFeatureCircle ? 110 : centerX - 150;
     const pressureX = hasFeatureCircle ? 510 : centerX + 150;
     const unitX = bothFeatures ? centerX : hasFeatureCircle ? centerX - 55 : centerX;
@@ -1631,7 +1635,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.25.1-label-wrap-calefa-rename`;
+    const schemaCacheKey = `${language}:0.25.2-grow-cooling-pressure-boxes`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1659,5 +1663,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.25.1-label-wrap-calefa-rename";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.2-grow-cooling-pressure-boxes";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
