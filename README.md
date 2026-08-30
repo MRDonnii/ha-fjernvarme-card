@@ -4,18 +4,22 @@ An animated Home Assistant Lovelace card for a district heating (fjernvarme) sub
 unit, built around the entity layout exposed by Wavin Calefa / Sentio units and a
 Kamstrup wireless M-Bus billing meter — but any set of matching sensors will work.
 
-The card shows four animated pipe "lanes":
+The card shows three animated pipe "lanes":
 
 - **Primary / district heating** (supply and return from the utility)
 - **Central heating** (radiator supply/return)
 - **Domestic hot water** (cold in / hot out)
-- **DHW circulation** (the recirculation loop that keeps hot-water pipes warm)
 
 Each pipe's color runs along a configurable temperature gradient (from a "cold" color to
 a "hot" color) and animates only while there's actual flow — a stopped/idle circuit
 renders as a plain gray pipe. Status circles across the top and bottom show unit health
 (alarms, pressure, cooling/ΔT), pump/valve state, standby/vacation switches, and outdoor
 temperature, each with a color-coded ring.
+
+The DHW circulation/bypass loop (the recirculation line that keeps hot-water pipes warm)
+is drawn as a small animated loop hanging off the domestic-hot-water pipe itself, rather
+than as a separate lane — it lights up and animates only while the circulation pump is
+actually running.
 
 ## Installation
 

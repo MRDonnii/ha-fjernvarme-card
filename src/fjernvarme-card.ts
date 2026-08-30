@@ -190,7 +190,7 @@ class FjernvarmeCard extends HTMLElement {
   }
 
   _diagramHeight() {
-    return 532;
+    return 510;
   }
 
   _cardHeightForWidth(width) {
@@ -590,6 +590,25 @@ class FjernvarmeCard extends HTMLElement {
     };
   }
 
+  // A small recirculation/bypass loop hanging off a lane's own pipe, rather
+  // than a full separate lane - animates only while the given status entity
+  // reports on (e.g. the DHW circulation pump running).
+  _bypassLoop(id, xStart, xEnd, mainY, dipY, tempKey, statusKey, duration, stopped) {
+    if (!this._entityId(statusKey) && !this._entityId(tempKey)) return "";
+    const path = `M${xStart} ${mainY} C ${xStart} ${dipY}, ${xEnd} ${dipY}, ${xEnd} ${mainY}`;
+    const temp = this._number(tempKey);
+    const color = Number.isFinite(temp) ? this._temperatureColor(temp) : "var(--fv-muted)";
+    const stoppedClass = stopped ? " stopped" : "";
+    return `
+              <g>
+                <path class="duct-bg" d="${path}"></path>
+                <path class="flow-glow${stoppedClass}" stroke="${color}" d="${path}"></path>
+                <path class="flow${stoppedClass}" stroke="${color}" d="${path}"></path>
+                ${this._airLines(path, duration, stopped, false)}
+              </g>
+    `;
+  }
+
   _pressureRing() {
     const value = this._number("pressure");
     if (!this._entityId("pressure") || !Number.isFinite(value)) return undefined;
@@ -736,14 +755,13 @@ class FjernvarmeCard extends HTMLElement {
     const gPrimary = `${this._id}-primary`;
     const gCh = `${this._id}-ch`;
     const gDhw = `${this._id}-dhw`;
-    const gCirc = `${this._id}-circ`;
 
     const laneY1 = 154;
     const laneY2 = 234;
     const laneY3 = 314;
-    const laneY4 = 394;
+    const bypassDipY = laneY3 + 58;
     const topRowY = 56;
-    const bottomRowY = 482;
+    const bottomRowY = 460;
     const hasSentio = !!this._entityId("sentio_active");
     const coolingX = hasSentio ? 110 : centerX - 150;
     const unitX = hasSentio ? centerX - 55 : centerX;
@@ -753,7 +771,7 @@ class FjernvarmeCard extends HTMLElement {
     const primaryFlow = this._laneFlowState(["meter_flow"]);
     const chFlow = this._laneFlowState(["ch_valve"]);
     const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
-    const circFlow = this._laneFlowState(["circulation_status"]);
+    const bypassFlow = this._laneFlowState(["circulation_status"]);
 
     // Supply always on the same side, return always on the other, consistently
     // across every lane. `swap_sides` flips all four at once; supply/cold-in on
@@ -769,12 +787,11 @@ class FjernvarmeCard extends HTMLElement {
     const primarySides = sides("primary_return", this._t("primary_return"), "primary_supply", this._t("primary_supply"));
     const chSides = sides("ch_return", this._t("ch_return"), "ch_supply", this._t("ch_supply"));
     const dhwSides = sides("dhw_hot_out", this._t("dhw_hot_out"), "dhw_cold_in", this._t("dhw_cold_in"));
-    const circSides = sides("circulation_bypass_temp", this._t("circulation_bypass_temp"), "circulation_temp", this._t("circulation_temp"));
 
     const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped, flowReversed);
     const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped, flowReversed);
     const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, dhwSides.leftKey, dhwSides.rightKey, dhwFlow.duration, dhwFlow.stopped, flowReversed);
-    const circLane = this._lanePipe(gCirc, 110, 510, laneY4, circSides.leftKey, circSides.rightKey, circFlow.duration, circFlow.stopped, flowReversed);
+    const bypassLoop = this._bypassLoop(`${this._id}-bypass`, 190, 430, laneY3, bypassDipY, "circulation_bypass_temp", "circulation_status", bypassFlow.duration, bypassFlow.stopped);
 
     const laneBox = (key, label, x, y, align) => {
       if (!this._entityId(key)) return "";
@@ -1030,7 +1047,6 @@ class FjernvarmeCard extends HTMLElement {
               ${primaryLane.gradient}
               ${chLane.gradient}
               ${dhwLane.gradient}
-              ${circLane.gradient}
             </defs>
 
             ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"))}
@@ -1052,12 +1068,9 @@ class FjernvarmeCard extends HTMLElement {
             ${laneBox(dhwSides.leftKey, dhwSides.leftLabel, 5, laneY3, "left")}
             ${laneBox(dhwSides.rightKey, dhwSides.rightLabel, 515, laneY3, "right")}
             ${dhwLane.markup}
+            ${bypassLoop}
             ${this._laneBadgeSvg("dhw_flow", 310, laneY3, "droplet", this._formatWithUnit("dhw_flow", 0, ""))}
-
-            ${laneBox(circSides.leftKey, circSides.leftLabel, 5, laneY4, "left")}
-            ${laneBox(circSides.rightKey, circSides.rightLabel, 515, laneY4, "right")}
-            ${circLane.markup}
-            ${this._laneBadgeSvg("circulation_status", 310, laneY4, "pump", this._isOn("circulation_status") ? this._t("on") : this._t("off"))}
+            ${this._laneBadgeSvg("circulation_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), bypassFlow.stopped ? undefined : this._temperatureColor(this._number("circulation_bypass_temp")))}
 
             ${this._statusCircle("standby", this._t("standby"), this._isOn("standby") ? this._t("on") : this._t("off"), centerX - 180, bottomRowY, "", false, this._onOffRing("standby"))}
             ${this._statusCircle("vacation", this._t("vacation"), this._isOn("vacation") ? this._t("on") : this._t("off"), centerX - 60, bottomRowY, "", false, this._onOffRing("vacation"))}
@@ -1479,7 +1492,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.21.1-cooling-flow-neutral`;
+    const schemaCacheKey = `${language}:0.22.0-bypass-loop`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1507,5 +1520,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.21.1-cooling-flow-neutral";
+window.__FJERNVARME_CARD_VERSION__ = "0.22.0-bypass-loop";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
