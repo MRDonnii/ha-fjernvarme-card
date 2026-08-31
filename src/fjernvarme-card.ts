@@ -309,6 +309,22 @@ class FjernvarmeCard extends HTMLElement {
     return `${value.toFixed(decimals)} ${this._unit(key, fallbackUnit)}`;
   }
 
+  _formatFlowLitersPerHour(key) {
+    const value = this._number(key);
+    if (value === undefined) return "—";
+    const unit = this._unit(key, "L/h").toString().trim().toLowerCase();
+    const litersPerHour = ["m³/h", "m3/h", "m³/t", "m3/t"].includes(unit) ? value * 1000 : value;
+    return `${Math.round(litersPerHour)} L/h`;
+  }
+
+  _formatPowerKilowatts(key) {
+    const value = this._number(key);
+    if (value === undefined) return "—";
+    const unit = this._unit(key, "kW").toString().trim().toLowerCase();
+    const kilowatts = unit === "w" ? value / 1000 : value;
+    return `${kilowatts.toFixed(1)} kW`;
+  }
+
   _formatDisplayState(key) {
     const entity = this._entity(key);
     if (!entity || entity.state === "unknown" || entity.state === "unavailable") return "—";
@@ -353,6 +369,8 @@ class FjernvarmeCard extends HTMLElement {
         off: "Off",
         on: "On",
         meter_summary: "Meter",
+        meter_flow_short: "Flow",
+        meter_power_short: "Power",
         sentio: "Heat call",
         sentio_active: "Heat call enabled",
         sentio_status: "Heat call status",
@@ -392,6 +410,8 @@ class FjernvarmeCard extends HTMLElement {
         off: "Fra",
         on: "Til",
         meter_summary: "Måler",
+        meter_flow_short: "Flow",
+        meter_power_short: "Effekt",
         sentio: "Varmekald",
         sentio_active: "Varmekald aktiveret",
         sentio_status: "Varmekald status",
@@ -545,7 +565,11 @@ class FjernvarmeCard extends HTMLElement {
     const glossRy = large ? 16 : 14;
     const labelY = large ? -18 : -15;
     const valueY = large ? 15 : 14;
-    const valueFontSize = valueFontSizeOverride || (large ? "19px" : "16px");
+    const valueLength = this._humanizeState(value || "").length;
+    const fittedValueFontSize = large
+      ? valueLength > 12 ? "11px" : valueLength > 9 ? "13px" : valueLength > 6 ? "16px" : "18px"
+      : valueLength > 9 ? "11px" : valueLength > 6 ? "13px" : "16px";
+    const valueFontSize = valueFontSizeOverride || fittedValueFontSize;
     const bgStyle = bgColor ? ` style="fill:${bgColor};"` : "";
     // A label with a space wraps onto two lines once it's long enough that
     // one line would run close to the box edge (e.g. "Auto standby") -
@@ -605,8 +629,8 @@ class FjernvarmeCard extends HTMLElement {
   _primaryMetricsBadgeSvg(x, y) {
     const metrics = [
       ["primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, "")],
-      ["meter_flow", this._t("meter_flow_short"), this._formatWithUnit("meter_flow", 0, "")],
-      ["meter_power", this._t("meter_power_short"), this._formatWithUnit("meter_power", 1, "")]
+      ["meter_flow", this._t("meter_flow_short"), this._formatFlowLitersPerHour("meter_flow")],
+      ["meter_power", this._t("meter_power_short"), this._formatPowerKilowatts("meter_power")]
     ].filter(([key]) => this._entityId(key));
     if (!metrics.length) return "";
     const rowHeight = 18;
@@ -679,6 +703,13 @@ class FjernvarmeCard extends HTMLElement {
                 <circle cx="${xEnd}" cy="${junctionY}" r="4" fill="${junctionColor}"></circle>
               </g>
     `;
+  }
+
+  _isBypassActive() {
+    const state = this._state("bvv_bypass_status");
+    if (state === undefined) return false;
+    return ["on", "true", "1", "til", "aktiv", "active", "åben", "aaben", "open", "bypass aktiv", "bypass active"]
+      .includes(state.toString().trim().toLowerCase());
   }
 
   _pressureRing() {
@@ -871,7 +902,10 @@ class FjernvarmeCard extends HTMLElement {
     const primaryFlow = this._laneFlowState(["meter_flow"]);
     const chFlow = this._laneFlowState(["ch_valve"]);
     const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
-    const bypassFlow = this._laneFlowState(["bvv_bypass_status"]);
+    const bypassActive = this._isBypassActive();
+    const bypassFlow = bypassActive
+      ? { duration: "3.4s", stopped: false }
+      : { duration: "0s", stopped: true };
 
     // Supply always on the same side, return always on the other, consistently
     // across every lane. `swap_sides` flips all four at once; supply/cold-in on
@@ -1191,7 +1225,7 @@ class FjernvarmeCard extends HTMLElement {
             ${dhwLane.markup}
             ${bypassLoop}
             ${this._laneBadgeSvg("dhw_flow", 310, laneY3, "droplet", this._formatWithUnit("dhw_flow", 0, ""))}
-            ${this._laneBadgeSvg("bvv_bypass_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), bypassFlow.stopped ? undefined : this._temperatureColor(this._number("circulation_bypass_temp")))}
+            ${bypassActive ? this._laneBadgeSvg("bvv_bypass_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), this._temperatureColor(this._number("circulation_bypass_temp"))) : ""}
 
             ${this._statusCircle("standby", this._t("standby"), this._isOn("standby") ? this._t("on") : this._t("off"), centerX - 180, bottomRowY, "", false, this._onOffRing("standby"))}
             ${this._statusCircle("vacation", this._t("vacation"), this._isOn("vacation") ? this._t("on") : this._t("off"), centerX - 60, bottomRowY, "", false, this._onOffRing("vacation"))}
@@ -1648,7 +1682,7 @@ class FjernvarmeCardEditor extends HTMLElement {
     }
 
     const language = this._language();
-    const schemaCacheKey = `${language}:0.25.4-live-status`;
+    const schemaCacheKey = `${language}:0.25.5-layout-fix`;
     if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
       this._schemaCache = this._schema();
       this._schemaCacheKey = schemaCacheKey;
@@ -1676,5 +1710,5 @@ window.customCards.push({
   preview: true
 });
 
-window.__FJERNVARME_CARD_VERSION__ = "0.25.4-live-status";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.5-layout-fix";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");

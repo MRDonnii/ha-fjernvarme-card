@@ -302,6 +302,23 @@ var FjernvarmeCard = class extends HTMLElement {
 		if (value === void 0) return "—";
 		return `${value.toFixed(decimals)} ${this._unit(key, fallbackUnit)}`;
 	}
+	_formatFlowLitersPerHour(key) {
+		const value = this._number(key);
+		if (value === void 0) return "—";
+		const unit = this._unit(key, "L/h").toString().trim().toLowerCase();
+		const litersPerHour = [
+			"m³/h",
+			"m3/h",
+			"m³/t",
+			"m3/t"
+		].includes(unit) ? value * 1e3 : value;
+		return `${Math.round(litersPerHour)} L/h`;
+	}
+	_formatPowerKilowatts(key) {
+		const value = this._number(key);
+		if (value === void 0) return "—";
+		return `${(this._unit(key, "kW").toString().trim().toLowerCase() === "w" ? value / 1e3 : value).toFixed(1)} kW`;
+	}
 	_formatDisplayState(key) {
 		const entity = this._entity(key);
 		if (!entity || entity.state === "unknown" || entity.state === "unavailable") return "—";
@@ -352,6 +369,8 @@ var FjernvarmeCard = class extends HTMLElement {
 				off: "Off",
 				on: "On",
 				meter_summary: "Meter",
+				meter_flow_short: "Flow",
+				meter_power_short: "Power",
 				sentio: "Heat call",
 				sentio_active: "Heat call enabled",
 				sentio_status: "Heat call status",
@@ -391,6 +410,8 @@ var FjernvarmeCard = class extends HTMLElement {
 				off: "Fra",
 				on: "Til",
 				meter_summary: "Måler",
+				meter_flow_short: "Flow",
+				meter_power_short: "Effekt",
 				sentio: "Varmekald",
 				sentio_active: "Varmekald aktiveret",
 				sentio_status: "Varmekald status",
@@ -614,7 +635,8 @@ var FjernvarmeCard = class extends HTMLElement {
 		const glossRy = large ? 16 : 14;
 		const labelY = large ? -18 : -15;
 		const valueY = large ? 15 : 14;
-		const valueFontSize = valueFontSizeOverride || (large ? "19px" : "16px");
+		const valueLength = this._humanizeState(value || "").length;
+		const valueFontSize = valueFontSizeOverride || (large ? valueLength > 12 ? "11px" : valueLength > 9 ? "13px" : valueLength > 6 ? "16px" : "18px" : valueLength > 9 ? "11px" : valueLength > 6 ? "13px" : "16px");
 		const bgStyle = bgColor ? ` style="fill:${bgColor};"` : "";
 		const spaceIndex = label.indexOf(" ");
 		const wrapLabel = spaceIndex > 0 && label.length > 10;
@@ -673,12 +695,12 @@ var FjernvarmeCard = class extends HTMLElement {
 			[
 				"meter_flow",
 				this._t("meter_flow_short"),
-				this._formatWithUnit("meter_flow", 0, "")
+				this._formatFlowLitersPerHour("meter_flow")
 			],
 			[
 				"meter_power",
 				this._t("meter_power_short"),
-				this._formatWithUnit("meter_power", 1, "")
+				this._formatPowerKilowatts("meter_power")
 			]
 		].filter(([key]) => this._entityId(key));
 		if (!metrics.length) return "";
@@ -743,6 +765,23 @@ var FjernvarmeCard = class extends HTMLElement {
                 <circle cx="${xEnd}" cy="${junctionY}" r="4" fill="${junctionColor}"></circle>
               </g>
     `;
+	}
+	_isBypassActive() {
+		const state = this._state("bvv_bypass_status");
+		if (state === void 0) return false;
+		return [
+			"on",
+			"true",
+			"1",
+			"til",
+			"aktiv",
+			"active",
+			"åben",
+			"aaben",
+			"open",
+			"bypass aktiv",
+			"bypass active"
+		].includes(state.toString().trim().toLowerCase());
 	}
 	_pressureRing() {
 		const value = this._number("pressure");
@@ -963,7 +1002,14 @@ var FjernvarmeCard = class extends HTMLElement {
 		const primaryFlow = this._laneFlowState(["meter_flow"]);
 		const chFlow = this._laneFlowState(["ch_valve"]);
 		const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
-		const bypassFlow = this._laneFlowState(["bvv_bypass_status"]);
+		const bypassActive = this._isBypassActive();
+		const bypassFlow = bypassActive ? {
+			duration: "3.4s",
+			stopped: false
+		} : {
+			duration: "0s",
+			stopped: true
+		};
 		const swapSides = this._config?.appearance?.swap_sides !== false;
 		const flowReversed = !swapSides;
 		const sides = (leftKey, leftLabel, rightKey, rightLabel) => swapSides ? {
@@ -1281,7 +1327,7 @@ var FjernvarmeCard = class extends HTMLElement {
             ${dhwLane.markup}
             ${bypassLoop}
             ${this._laneBadgeSvg("dhw_flow", 310, laneY3, "droplet", this._formatWithUnit("dhw_flow", 0, ""))}
-            ${this._laneBadgeSvg("bvv_bypass_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), bypassFlow.stopped ? void 0 : this._temperatureColor(this._number("circulation_bypass_temp")))}
+            ${bypassActive ? this._laneBadgeSvg("bvv_bypass_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), this._temperatureColor(this._number("circulation_bypass_temp"))) : ""}
 
             ${this._statusCircle("standby", this._t("standby"), this._isOn("standby") ? this._t("on") : this._t("off"), 130, bottomRowY, "", false, this._onOffRing("standby"))}
             ${this._statusCircle("vacation", this._t("vacation"), this._isOn("vacation") ? this._t("on") : this._t("off"), 250, bottomRowY, "", false, this._onOffRing("vacation"))}
@@ -1916,7 +1962,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.25.4-live-status`;
+		const schemaCacheKey = `${this._language()}:0.25.5-layout-fix`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1935,6 +1981,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.25.4-live-status";
+window.__FJERNVARME_CARD_VERSION__ = "0.25.5-layout-fix";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
