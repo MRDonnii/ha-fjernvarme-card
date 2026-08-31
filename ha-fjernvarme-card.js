@@ -654,9 +654,8 @@ var FjernvarmeCard = class extends HTMLElement {
 		const valueFontSize = valueFontSizeOverride || (large ? valueLength > 12 ? "11px" : valueLength > 9 ? "13px" : valueLength > 6 ? "16px" : "18px" : valueLength > 9 ? "11px" : valueLength > 6 ? "13px" : "16px");
 		const bgStyle = bgColor ? ` style="fill:${bgColor};"` : "";
 		const spaceIndex = label.indexOf(" ");
-		const wrapLabel = spaceIndex > 0 && label.length > 10;
-		const labelMarkup = wrapLabel ? `<text x="0" y="${labelY - 5}" text-anchor="middle" class="status-label"><tspan x="0" dy="0">${this._escapeHtml(label.slice(0, spaceIndex))}</tspan><tspan x="0" dy="10">${this._escapeHtml(label.slice(spaceIndex + 1))}</tspan></text>` : `<text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>`;
-		const adjustedValueY = wrapLabel ? valueY + 5 : valueY;
+		const labelMarkup = spaceIndex > 0 && label.length > 10 ? `<text x="0" y="${labelY - 5}" text-anchor="middle" class="status-label"><tspan x="0" dy="0">${this._escapeHtml(label.slice(0, spaceIndex))}</tspan><tspan x="0" dy="10">${this._escapeHtml(label.slice(spaceIndex + 1))}</tspan></text>` : `<text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>`;
+		const adjustedValueY = valueY;
 		return `
             <g ${this._svgEntityAttrs(entityKey)} tabindex="0" transform="translate(${x} ${y})">
               <rect class="${boxClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"${bgStyle}></rect>
@@ -2004,7 +2003,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.26.1-short-status`;
+		const schemaCacheKey = `${this._language()}:0.26.2-aligned-status-values`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -2023,6 +2022,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.26.1-short-status";
+window.__FJERNVARME_CARD_VERSION__ = "0.26.2-aligned-status-values";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
