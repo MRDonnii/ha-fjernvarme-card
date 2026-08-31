@@ -30,11 +30,23 @@ var FjernvarmeCard = class extends HTMLElement {
 				ch_supply: findEntity(["cvv_fremlob"], void 0),
 				ch_return: findEntity(["cvv_retur"], void 0),
 				ch_valve: findEntity(["cvv_ventilposition"], void 0),
+				ch_flow: findEntity(["radiator_flow", "cvv_flow"], void 0),
+				ch_power: findEntity([
+					"radiator_effekt",
+					"radiator_power",
+					"cvv_effekt",
+					"cvv_power"
+				], void 0),
 				ch_outdoor: findEntity(["udetemperatur"], void 0),
 				ch_pump: findEntity(["heating_pump_status", "pumpe_status"], void 0),
 				dhw_cold_in: findEntity(["koldtvandsfoler", "cold_water"], void 0),
 				dhw_hot_out: findEntity(["brugsvand_ud", "dhw_out"], void 0),
 				dhw_flow: findEntity(["brugsvandsflow"], void 0),
+				dhw_power: findEntity([
+					"varmtvand_effekt",
+					"dhw_power",
+					"hot_water_power"
+				], void 0),
 				dhw_valve: findEntity(["ventilposition"], void 0),
 				dhw_setpoint: findEntity(["brugsvand_setpunkt"], void 0),
 				dhw_status: findEntity(["brugsvand_status"], void 0),
@@ -206,11 +218,14 @@ var FjernvarmeCard = class extends HTMLElement {
 			"ch_supply",
 			"ch_return",
 			"ch_valve",
+			"ch_flow",
+			"ch_power",
 			"ch_outdoor",
 			"ch_pump",
 			"dhw_cold_in",
 			"dhw_hot_out",
 			"dhw_flow",
+			"dhw_power",
 			"dhw_valve",
 			"dhw_setpoint",
 			"dhw_status",
@@ -671,6 +686,7 @@ var FjernvarmeCard = class extends HTMLElement {
         <line x1="7" y1="6" x2="7" y2="8.5" class="badge-icon-stroke"></line>
       `,
 			droplet: `<path class="badge-icon-fill" d="M0 -9 C5 -2 5.5 6 0 8.5 C-5.5 6 -5 -2 0 -9 Z"></path>`,
+			power: `<path class="badge-icon-fill" d="M2 -10 L-8 2 H-1 L-4 10 L9 -3 H2 Z"></path>`,
 			pump: `
         <path class="badge-icon-stroke" d="M-7 -2 A7 7 0 1 1 -6 4" fill="none"></path>
         <path class="badge-icon-fill" d="M-9 3 L-4 7 L-3 0 Z"></path>
@@ -1315,18 +1331,21 @@ var FjernvarmeCard = class extends HTMLElement {
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
             ${laneBox(primarySides.rightKey, primarySides.rightLabel, 515, laneY1, "right")}
             ${primaryLane.markup}
-            ${this._primaryMetricsBadgeSvg(310, laneY1)}
+            ${this._laneBadgeSvg("meter_flow", 282, laneY1, "droplet", this._formatFlowLitersPerHour("meter_flow"))}
+            ${this._laneBadgeSvg("meter_power", 338, laneY1, "power", this._formatPowerKilowatts("meter_power"))}
 
             ${laneBox(chSides.leftKey, chSides.leftLabel, 5, laneY2, "left")}
             ${laneBox(chSides.rightKey, chSides.rightLabel, 515, laneY2, "right")}
             ${chLane.markup}
-            ${this._laneBadgeSvg("ch_valve", 310, laneY2, "radiator", this._formatNumber("ch_valve", 0, "%"))}
+            ${this._laneBadgeSvg("ch_flow", 282, laneY2, "droplet", this._formatFlowLitersPerHour("ch_flow"))}
+            ${this._laneBadgeSvg("ch_power", 338, laneY2, "power", this._formatPowerKilowatts("ch_power"))}
 
             ${laneBox(dhwSides.leftKey, dhwSides.leftLabel, 5, laneY3, "left")}
             ${laneBox(dhwSides.rightKey, dhwSides.rightLabel, 515, laneY3, "right")}
             ${dhwLane.markup}
             ${bypassLoop}
-            ${this._laneBadgeSvg("dhw_flow", 310, laneY3, "droplet", this._formatWithUnit("dhw_flow", 0, ""))}
+            ${this._laneBadgeSvg("dhw_flow", 282, laneY3, "droplet", this._formatFlowLitersPerHour("dhw_flow"))}
+            ${this._laneBadgeSvg("dhw_power", 338, laneY3, "power", this._formatPowerKilowatts("dhw_power"))}
             ${bypassActive ? this._laneBadgeSvg("bvv_bypass_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), this._temperatureColor(this._number("circulation_bypass_temp"))) : ""}
 
             ${this._statusCircle("standby", this._t("standby"), this._isOn("standby") ? this._t("on") : this._t("off"), 130, bottomRowY, "", false, this._onOffRing("standby"))}
@@ -1382,11 +1401,14 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			ch_supply: entities.ch_supply,
 			ch_return: entities.ch_return,
 			ch_valve: entities.ch_valve,
+			ch_flow: entities.ch_flow,
+			ch_power: entities.ch_power,
 			ch_outdoor: entities.ch_outdoor,
 			ch_pump: entities.ch_pump,
 			dhw_cold_in: entities.dhw_cold_in,
 			dhw_hot_out: entities.dhw_hot_out,
 			dhw_flow: entities.dhw_flow,
+			dhw_power: entities.dhw_power,
 			dhw_valve: entities.dhw_valve,
 			dhw_setpoint: entities.dhw_setpoint,
 			dhw_status: entities.dhw_status,
@@ -1443,12 +1465,15 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 				ch_supply: "Radiator supply (CVV frem)",
 				ch_return: "Radiator return (CVV retur)",
 				ch_valve: "Radiator valve position",
+				ch_flow: "Radiator flow",
+				ch_power: "Radiator power",
 				ch_outdoor: "Outdoor temperature",
 				ch_pump: "Heating pump status",
 				dhw: "Domestic hot water",
 				dhw_cold_in: "Cold water in (KV)",
 				dhw_hot_out: "Hot water out (BV)",
 				dhw_flow: "DHW flow",
+				dhw_power: "DHW power",
 				dhw_valve: "DHW valve position",
 				dhw_setpoint: "DHW setpoint",
 				dhw_status: "DHW status",
@@ -1495,12 +1520,15 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 				ch_supply: "Radiator frem (CVV frem)",
 				ch_return: "Radiator retur (CVV retur)",
 				ch_valve: "Radiatorventil position",
+				ch_flow: "Radiatorflow",
+				ch_power: "Radiatoreffekt",
 				ch_outdoor: "Udetemperatur",
 				ch_pump: "Varmepumpe status",
 				dhw: "Varmt brugsvand",
 				dhw_cold_in: "Koldt vand ind (KV)",
 				dhw_hot_out: "Varmt vand ud (BV)",
 				dhw_flow: "Brugsvandsflow",
+				dhw_power: "Brugsvandseffekt",
 				dhw_valve: "Brugsvandsventil position",
 				dhw_setpoint: "Brugsvand setpunkt",
 				dhw_status: "Brugsvand status",
@@ -1623,6 +1651,14 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 						selector: { entity: { domain: "sensor" } }
 					},
 					{
+						name: "ch_flow",
+						selector: { entity: { domain: "sensor" } }
+					},
+					{
+						name: "ch_power",
+						selector: { entity: { domain: "sensor" } }
+					},
+					{
 						name: "ch_outdoor",
 						selector: { entity: { domain: "sensor" } }
 					},
@@ -1649,6 +1685,10 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 					},
 					{
 						name: "dhw_flow",
+						selector: { entity: { domain: "sensor" } }
+					},
+					{
+						name: "dhw_power",
 						selector: { entity: { domain: "sensor" } }
 					},
 					{
@@ -1888,11 +1928,14 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			ch_supply: value.ch_supply || void 0,
 			ch_return: value.ch_return || void 0,
 			ch_valve: value.ch_valve || void 0,
+			ch_flow: value.ch_flow || void 0,
+			ch_power: value.ch_power || void 0,
 			ch_outdoor: value.ch_outdoor || void 0,
 			ch_pump: value.ch_pump || void 0,
 			dhw_cold_in: value.dhw_cold_in || void 0,
 			dhw_hot_out: value.dhw_hot_out || void 0,
 			dhw_flow: value.dhw_flow || void 0,
+			dhw_power: value.dhw_power || void 0,
 			dhw_valve: value.dhw_valve || void 0,
 			dhw_setpoint: value.dhw_setpoint || void 0,
 			dhw_status: value.dhw_status || void 0,
@@ -1962,7 +2005,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.25.5-layout-fix`;
+		const schemaCacheKey = `${this._language()}:0.26.0-dual-flow-power`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -1981,6 +2024,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.25.5-layout-fix";
+window.__FJERNVARME_CARD_VERSION__ = "0.26.0-dual-flow-power";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion

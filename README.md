@@ -57,11 +57,14 @@ entities:
   ch_supply: sensor.radiator_supply_temperature
   ch_return: sensor.radiator_return_temperature
   ch_valve: sensor.radiator_valve_position
+  ch_flow: sensor.radiator_flow
+  ch_power: sensor.radiator_power
   ch_outdoor: sensor.outdoor_temperature
   ch_pump: sensor.heating_pump_status
   dhw_cold_in: sensor.cold_water_temperature
   dhw_hot_out: sensor.hot_water_temperature
   dhw_flow: sensor.dhw_flow
+  dhw_power: sensor.dhw_power
   dhw_valve: sensor.dhw_valve_position
   dhw_setpoint: sensor.dhw_setpoint
   dhw_status: sensor.dhw_status
@@ -112,9 +115,9 @@ any of them are active.
 | `entities.primary_cooling` | Cooling / ΔT reading, also drives the AFKØLING circle's background gradient |
 | `entities.pressure` | System pressure |
 | `cooling_target.optimal` / `tolerance` | The target ΔT (default 30°C) and +/- band (default 5°C) considered "normal" — the AFKØLING circle is green inside that band and fades to red the further outside it the reading sits, in either direction |
-| `entities.meter_energy_total` / `meter_volume_total` / `meter_flow` / `meter_power` | Billing meter totals plus current main flow and actual power; cooling, flow, and power are shown together in the primary lane's center badge |
-| `entities.ch_supply` / `ch_return` / `ch_valve` / `ch_outdoor` / `ch_pump` | Central heating (radiator) circuit |
-| `entities.dhw_cold_in` / `dhw_hot_out` / `dhw_flow` / `dhw_valve` / `dhw_setpoint` / `dhw_status` | Domestic hot water circuit |
+| `entities.meter_energy_total` / `meter_volume_total` / `meter_flow` / `meter_power` | Billing meter totals plus current main flow and actual power; flow and power are shown as two icon-only center badges |
+| `entities.ch_supply` / `ch_return` / `ch_valve` / `ch_flow` / `ch_power` / `ch_outdoor` / `ch_pump` | Central heating (radiator) circuit; flow and power are shown as two icon-only center badges |
+| `entities.dhw_cold_in` / `dhw_hot_out` / `dhw_flow` / `dhw_power` / `dhw_valve` / `dhw_setpoint` / `dhw_status` | Domestic hot water circuit; flow and power are shown as two icon-only center badges |
 | `entities.circulation_temp` / `circulation_status` / `circulation_bypass_temp` | DHW circulation/recirculation loop |
 | `entities.bvv_bypass_status` | Actual DHW/BVV bypass state; exclusively controls whether the bypass loop is shown and animated |
 | `entities.standby` / `vacation` | Switch entities shown as status circles |
