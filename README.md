@@ -118,12 +118,12 @@ any of them are active.
 | `entities.circulation_temp` / `circulation_status` / `circulation_bypass_temp` | DHW circulation/recirculation loop |
 | `entities.bvv_bypass_status` | Actual DHW/BVV bypass state; exclusively controls whether the bypass loop is shown and animated |
 | `entities.standby` / `vacation` | Switch entities shown as status circles |
-| `entities.sentio_active` | Optional: an `input_boolean` (or similar) toggling an external heat-call function. Adds a large circle next to the unit circle, shown only when this is configured |
-| `entities.sentio_status` | Optional: a text sensor with the current status, shown on the circle when `sentio_active` is on |
-| `entities.sentio_call_active` | Optional: an `input_boolean`/`binary_sensor` marking a call as currently in progress — colors the circle's ring |
+| `entities.sentio_active` | Optional: an `input_boolean` (or similar) toggling an external heat-call function. Retained for configuration compatibility, but its enabled/disabled state is not shown as operating status |
+| `entities.sentio_status` | Optional: a text sensor with diagnostic heat-call status. It does not override the actual call state shown on the card |
+| `entities.sentio_call_active` | Optional: an `input_boolean`/`binary_sensor` marking a call as currently in progress — controls the displayed heat-call state and colors the circle's ring |
 | `entities.sentio_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
-| `entities.auto_standby_active` | Optional: a `switch` toggling an automatic-standby function. Adds a box next to the unit box, shown only when this is configured. When both `sentio_active` and `auto_standby_active` are configured, the unit box stays centered at full size and the cooling/pressure boxes shrink slightly instead to make room |
-| `entities.auto_standby_status` | Optional: a text sensor with the current status, shown on the circle when `auto_standby_active` is on |
+| `entities.auto_standby_active` | Optional: a `switch` toggling an automatic-standby function. Retained for configuration compatibility, but its enabled/disabled state is not shown as operating status |
+| `entities.auto_standby_status` | Optional: a text sensor with the automation's current status; this is the preferred displayed status |
 | `entities.auto_standby_engaged` | Optional: a `binary_sensor` marking that standby is currently being held by the automation — colors the circle's ring |
 | `entities.auto_standby_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
 | `entities.alarms` | List of `binary_sensor` entities aggregated into the unit's alarm ring/count |
