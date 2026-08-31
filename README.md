@@ -53,6 +53,7 @@ entities:
   meter_energy_total: sensor.heat_meter_total_energy
   meter_volume_total: sensor.heat_meter_total_volume
   meter_flow: sensor.heat_meter_flow
+  meter_power: sensor.heat_meter_power
   ch_supply: sensor.radiator_supply_temperature
   ch_return: sensor.radiator_return_temperature
   ch_valve: sensor.radiator_valve_position
@@ -66,6 +67,7 @@ entities:
   dhw_status: sensor.dhw_status
   circulation_temp: sensor.circulation_return_temperature
   circulation_status: sensor.circulation_pump_status
+  bvv_bypass_status: sensor.dhw_bypass_status
   circulation_bypass_temp: sensor.circulation_bypass_temperature
   standby: switch.unit_standby
   vacation: switch.unit_vacation
@@ -110,10 +112,11 @@ any of them are active.
 | `entities.primary_cooling` | Cooling / ΔT reading, also drives the AFKØLING circle's background gradient |
 | `entities.pressure` | System pressure |
 | `cooling_target.optimal` / `tolerance` | The target ΔT (default 30°C) and +/- band (default 5°C) considered "normal" — the AFKØLING circle is green inside that band and fades to red the further outside it the reading sits, in either direction |
-| `entities.meter_energy_total` / `meter_volume_total` / `meter_flow` | Billing meter totals |
+| `entities.meter_energy_total` / `meter_volume_total` / `meter_flow` / `meter_power` | Billing meter totals plus current main flow and actual power; cooling, flow, and power are shown together in the primary lane's center badge |
 | `entities.ch_supply` / `ch_return` / `ch_valve` / `ch_outdoor` / `ch_pump` | Central heating (radiator) circuit |
 | `entities.dhw_cold_in` / `dhw_hot_out` / `dhw_flow` / `dhw_valve` / `dhw_setpoint` / `dhw_status` | Domestic hot water circuit |
 | `entities.circulation_temp` / `circulation_status` / `circulation_bypass_temp` | DHW circulation/recirculation loop |
+| `entities.bvv_bypass_status` | Actual DHW/BVV bypass state; exclusively controls whether the bypass loop is shown and animated |
 | `entities.standby` / `vacation` | Switch entities shown as status circles |
 | `entities.sentio_active` | Optional: an `input_boolean` (or similar) toggling an external heat-call function. Adds a large circle next to the unit circle, shown only when this is configured |
 | `entities.sentio_status` | Optional: a text sensor with the current status, shown on the circle when `sentio_active` is on |

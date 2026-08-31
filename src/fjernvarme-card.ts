@@ -16,6 +16,7 @@ class FjernvarmeCard extends HTMLElement {
         meter_energy_total: findEntity(["total_energy_consumption", "energi_total"], undefined),
         meter_volume_total: findEntity(["total_volume"], undefined),
         meter_flow: findEntity(["volume_flow"], undefined),
+        meter_power: findEntity(["meter_power", "heat_meter_power", "current_power", "aktuel_effekt"], undefined),
         ch_supply: findEntity(["cvv_fremlob"], undefined),
         ch_return: findEntity(["cvv_retur"], undefined),
         ch_valve: findEntity(["cvv_ventilposition"], undefined),
@@ -29,6 +30,7 @@ class FjernvarmeCard extends HTMLElement {
         dhw_status: findEntity(["brugsvand_status"], undefined),
         circulation_temp: findEntity(["circulation_temperature", "cirkulation_temperatur"], undefined),
         circulation_status: findEntity(["cirkulation_status"], undefined),
+        bvv_bypass_status: findEntity(["bvv_bypass_status", "bvv_bypass", "dhw_bypass"], undefined),
         circulation_bypass_temp: findEntity(["bypass_temperatur"], undefined),
         standby: findEntity(["standby"], undefined),
         vacation: findEntity(["ferie", "vacation"], undefined),
@@ -210,11 +212,13 @@ class FjernvarmeCard extends HTMLElement {
   _renderSignature() {
     const entityKeys = [
       "primary_supply", "primary_return", "primary_cooling", "pressure",
-      "meter_energy_total", "meter_volume_total", "meter_flow",
+      "meter_energy_total", "meter_volume_total", "meter_flow", "meter_power",
       "ch_supply", "ch_return", "ch_valve", "ch_outdoor", "ch_pump",
       "dhw_cold_in", "dhw_hot_out", "dhw_flow", "dhw_valve", "dhw_setpoint", "dhw_status",
-      "circulation_temp", "circulation_status", "circulation_bypass_temp",
-      "standby", "vacation"
+      "circulation_temp", "circulation_status", "bvv_bypass_status", "circulation_bypass_temp",
+      "standby", "vacation",
+      "sentio_active", "sentio_status", "sentio_call_active", "sentio_fejl",
+      "auto_standby_active", "auto_standby_status", "auto_standby_engaged", "auto_standby_fejl"
     ];
     const appearance = this._config?.appearance || {};
     const entities = this._config?.entities || {};
@@ -317,7 +321,7 @@ class FjernvarmeCard extends HTMLElement {
 
   _isOn(key) {
     const state = this._state(key);
-    return state !== undefined && ["on", "true", "1", "open", "åben", "aaben"].includes(state.toString().trim().toLowerCase());
+    return state !== undefined && ["on", "true", "1", "open", "åben", "aaben", "til", "aktiv", "active", "bypass"].includes(state.toString().trim().toLowerCase());
   }
 
   _language() {
@@ -596,6 +600,28 @@ class FjernvarmeCard extends HTMLElement {
     `;
   }
 
+  _primaryMetricsBadgeSvg(x, y) {
+    const metrics = [
+      ["primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, "")],
+      ["meter_flow", this._t("meter_flow_short"), this._formatWithUnit("meter_flow", 0, "")],
+      ["meter_power", this._t("meter_power_short"), this._formatWithUnit("meter_power", 1, "")]
+    ].filter(([key]) => this._entityId(key));
+    if (!metrics.length) return "";
+    const rowHeight = 18;
+    const height = metrics.length * rowHeight + 12;
+    const startY = -(metrics.length - 1) * rowHeight / 2;
+    const rows = metrics.map(([key, label, value], index) => `
+              <text ${this._svgEntityAttrs(key)} tabindex="0" x="0" y="${startY + index * rowHeight + 4}" text-anchor="middle" class="badge-value primary-metric">
+                <tspan class="primary-metric-label">${this._escapeHtml(label)} </tspan>${this._escapeHtml(value)}
+              </text>`).join("");
+    return `
+            <g transform="translate(${x} ${y})">
+              <rect x="-58" y="${-height / 2}" width="116" height="${height}" rx="9" class="badge-box" style="fill:${this._coolingBackgroundColor("primary_cooling")}; fill-opacity:.88;"></rect>
+              ${rows}
+            </g>
+    `;
+  }
+
   _lanePipe(id, x1, x2, y, fromKey, toKey, duration, stopped, reversed = false) {
     const path = `M${x1} ${y} H${x2}`;
     const fromValue = this._number(fromKey);
@@ -694,17 +720,17 @@ class FjernvarmeCard extends HTMLElement {
   }
 
   _sentioRing() {
-    if (!this._entityId("sentio_active")) return undefined;
-    if (!this._isOn("sentio_active")) return undefined;
+    if (!this._hasAnyEntity(["sentio_status", "sentio_call_active", "sentio_fejl", "sentio_active"])) return undefined;
     if (this._isOn("sentio_fejl")) return { progress: 100, colorClass: "danger" };
     if (this._isOn("sentio_call_active")) return { progress: 100, colorClass: "info" };
     return { progress: 100, colorClass: "" };
   }
 
-  // Main circle value: whether there's a heat call right now - separate from
-  // the small on/off badge, which shows whether the feature itself is enabled.
+  _hasAnyEntity(keys) {
+    return keys.some((key) => !!this._entityId(key));
+  }
+
   _sentioStatusText() {
-    if (!this._isOn("sentio_active")) return this._t("off");
     if (this._isOn("sentio_fejl")) return this._t("sentio_fejl_short");
     if (this._isOn("sentio_call_active")) return this._t("sentio_active_short");
     if (this._entityId("sentio_status")) {
@@ -712,22 +738,19 @@ class FjernvarmeCard extends HTMLElement {
       if (rawStatus === "Fejlsikring" || rawStatus === "Intet svar fra Calefa") {
         return this._t("sentio_fejl_short");
       }
+      if (rawStatus !== undefined) return this._humanizeState(rawStatus);
     }
-    return this._t("on");
+    return this._entityId("sentio_active") ? (this._isOn("sentio_active") ? this._t("on") : this._t("off")) : "—";
   }
 
   _autoStandbyRing() {
-    if (!this._entityId("auto_standby_active")) return undefined;
-    if (!this._isOn("auto_standby_active")) return undefined;
+    if (!this._hasAnyEntity(["auto_standby_status", "auto_standby_engaged", "auto_standby_fejl", "auto_standby_active"])) return undefined;
     if (this._isOn("auto_standby_fejl")) return { progress: 100, colorClass: "danger" };
     if (this._isOn("auto_standby_engaged")) return { progress: 100, colorClass: "info" };
     return { progress: 100, colorClass: "" };
   }
 
-  // Mirrors _sentioStatusText(): "Til" means the feature is enabled but not
-  // currently doing anything; the other states name what it's doing.
   _autoStandbyStatusText() {
-    if (!this._isOn("auto_standby_active")) return this._t("off");
     if (this._isOn("auto_standby_fejl")) return this._t("auto_standby_fejl_short");
     if (this._isOn("auto_standby_engaged")) return this._t("auto_standby_active_short");
     if (this._entityId("auto_standby_status")) {
@@ -735,8 +758,9 @@ class FjernvarmeCard extends HTMLElement {
       if (rawStatus === "Fejlsikring" || rawStatus === "Failsafe") {
         return this._t("auto_standby_fejl_short");
       }
+      if (rawStatus !== undefined) return this._humanizeState(rawStatus);
     }
-    return this._t("on");
+    return this._entityId("auto_standby_active") ? (this._isOn("auto_standby_active") ? this._t("on") : this._t("off")) : "—";
   }
 
   _onOffRing(key, invert = false) {
@@ -819,8 +843,8 @@ class FjernvarmeCard extends HTMLElement {
     const bypassDipY = laneY3 + bypassEdgeOffset + bypassDipDepth;
     const topRowY = 56;
     const bottomRowY = 472;
-    const hasSentio = !!this._entityId("sentio_active");
-    const hasAutoStandby = !!this._entityId("auto_standby_active");
+    const hasSentio = this._hasAnyEntity(["sentio_status", "sentio_call_active", "sentio_fejl", "sentio_active"]);
+    const hasAutoStandby = this._hasAnyEntity(["auto_standby_status", "auto_standby_engaged", "auto_standby_fejl", "auto_standby_active"]);
     const hasFeatureCircle = hasSentio || hasAutoStandby;
     const bothFeatures = hasSentio && hasAutoStandby;
     // Sentio and auto-standby stay full (large) size in every case so long
@@ -843,7 +867,7 @@ class FjernvarmeCard extends HTMLElement {
     const primaryFlow = this._laneFlowState(["meter_flow"]);
     const chFlow = this._laneFlowState(["ch_valve"]);
     const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
-    const bypassFlow = this._laneFlowState(["circulation_status"]);
+    const bypassFlow = this._laneFlowState(["bvv_bypass_status"]);
 
     // Supply always on the same side, return always on the other, consistently
     // across every lane. `swap_sides` flips all four at once; supply/cold-in on
@@ -863,7 +887,7 @@ class FjernvarmeCard extends HTMLElement {
     const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped, flowReversed);
     const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped, flowReversed);
     const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, dhwSides.leftKey, dhwSides.rightKey, dhwFlow.duration, dhwFlow.stopped, flowReversed);
-    const bypassLoop = this._bypassLoop(`${this._id}-bypass`, 190, 430, laneY3, bypassEdgeOffset, bypassDipDepth, "circulation_bypass_temp", "circulation_status", bypassFlow.duration, bypassFlow.stopped);
+    const bypassLoop = this._bypassLoop(`${this._id}-bypass`, 190, 430, laneY3, bypassEdgeOffset, bypassDipDepth, "circulation_bypass_temp", "bvv_bypass_status", bypassFlow.duration, bypassFlow.stopped);
 
     const laneBox = (key, label, x, y, align) => {
       if (!this._entityId(key)) return "";
@@ -1151,7 +1175,7 @@ class FjernvarmeCard extends HTMLElement {
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
             ${laneBox(primarySides.rightKey, primarySides.rightLabel, 515, laneY1, "right")}
             ${primaryLane.markup}
-            ${this._laneBadgeSvg("primary_cooling", 310, laneY1, "exchanger", this._formatWithUnit("primary_cooling", 1, ""), this._coolingBackgroundColor("primary_cooling"))}
+            ${this._primaryMetricsBadgeSvg(310, laneY1)}
 
             ${laneBox(chSides.leftKey, chSides.leftLabel, 5, laneY2, "left")}
             ${laneBox(chSides.rightKey, chSides.rightLabel, 515, laneY2, "right")}
@@ -1163,7 +1187,7 @@ class FjernvarmeCard extends HTMLElement {
             ${dhwLane.markup}
             ${bypassLoop}
             ${this._laneBadgeSvg("dhw_flow", 310, laneY3, "droplet", this._formatWithUnit("dhw_flow", 0, ""))}
-            ${this._laneBadgeSvg("circulation_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), bypassFlow.stopped ? undefined : this._temperatureColor(this._number("circulation_bypass_temp")))}
+            ${this._laneBadgeSvg("bvv_bypass_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), bypassFlow.stopped ? undefined : this._temperatureColor(this._number("circulation_bypass_temp")))}
 
             ${this._statusCircle("standby", this._t("standby"), this._isOn("standby") ? this._t("on") : this._t("off"), centerX - 180, bottomRowY, "", false, this._onOffRing("standby"))}
             ${this._statusCircle("vacation", this._t("vacation"), this._isOn("vacation") ? this._t("on") : this._t("off"), centerX - 60, bottomRowY, "", false, this._onOffRing("vacation"))}
@@ -1219,6 +1243,7 @@ class FjernvarmeCardEditor extends HTMLElement {
       meter_energy_total: entities.meter_energy_total,
       meter_volume_total: entities.meter_volume_total,
       meter_flow: entities.meter_flow,
+      meter_power: entities.meter_power,
       ch_supply: entities.ch_supply,
       ch_return: entities.ch_return,
       ch_valve: entities.ch_valve,
@@ -1232,6 +1257,7 @@ class FjernvarmeCardEditor extends HTMLElement {
       dhw_status: entities.dhw_status,
       circulation_temp: entities.circulation_temp,
       circulation_status: entities.circulation_status,
+      bvv_bypass_status: entities.bvv_bypass_status,
       circulation_bypass_temp: entities.circulation_bypass_temp,
       standby: entities.standby,
       vacation: entities.vacation,
@@ -1278,6 +1304,9 @@ class FjernvarmeCardEditor extends HTMLElement {
         meter_energy_total: "Total energy",
         meter_volume_total: "Total volume",
         meter_flow: "Current flow",
+        meter_flow_short: "Flow",
+        meter_power: "Current power",
+        meter_power_short: "Power",
         ch: "Central heating (radiators)",
         ch_supply: "Radiator supply (CVV frem)",
         ch_return: "Radiator return (CVV retur)",
@@ -1294,6 +1323,7 @@ class FjernvarmeCardEditor extends HTMLElement {
         circulation: "DHW circulation loop",
         circulation_temp: "Circulation return temperature",
         circulation_status: "Circulation pump status",
+        bvv_bypass_status: "DHW bypass status",
         circulation_bypass_temp: "Circulation bypass temperature",
         controls: "Controls & alarms",
         standby: "Standby switch",
@@ -1326,6 +1356,9 @@ class FjernvarmeCardEditor extends HTMLElement {
         meter_energy_total: "Total energi",
         meter_volume_total: "Total volumen",
         meter_flow: "Aktuel flow",
+        meter_flow_short: "Flow",
+        meter_power: "Aktuel effekt",
+        meter_power_short: "Effekt",
         ch: "Centralvarme (radiatorer)",
         ch_supply: "Radiator frem (CVV frem)",
         ch_return: "Radiator retur (CVV retur)",
@@ -1342,6 +1375,7 @@ class FjernvarmeCardEditor extends HTMLElement {
         circulation: "Cirkulation (varmt brugsvand)",
         circulation_temp: "Cirkulation returtemperatur",
         circulation_status: "Cirkulationspumpe status",
+        bvv_bypass_status: "BVV bypass status",
         circulation_bypass_temp: "Cirkulation bypass temperatur",
         controls: "Styring & alarmer",
         standby: "Standby kontakt",
@@ -1392,7 +1426,8 @@ class FjernvarmeCardEditor extends HTMLElement {
         schema: [
           { name: "meter_energy_total", selector: { entity: { domain: "sensor" } } },
           { name: "meter_volume_total", selector: { entity: { domain: "sensor" } } },
-          { name: "meter_flow", selector: { entity: { domain: "sensor" } } }
+          { name: "meter_flow", selector: { entity: { domain: "sensor" } } },
+          { name: "meter_power", selector: { entity: { domain: "sensor" } } }
         ]
       },
       {
@@ -1433,7 +1468,8 @@ class FjernvarmeCardEditor extends HTMLElement {
         schema: [
           { name: "circulation_bypass_temp", selector: { entity: { domain: "sensor" } } },
           { name: "circulation_temp", selector: { entity: { domain: "sensor" } } },
-          { name: "circulation_status", selector: { entity: {} } }
+          { name: "circulation_status", selector: { entity: {} } },
+          { name: "bvv_bypass_status", selector: { entity: {} } }
         ]
       },
       {
@@ -1527,6 +1563,7 @@ class FjernvarmeCardEditor extends HTMLElement {
       meter_energy_total: value.meter_energy_total || undefined,
       meter_volume_total: value.meter_volume_total || undefined,
       meter_flow: value.meter_flow || undefined,
+      meter_power: value.meter_power || undefined,
       ch_supply: value.ch_supply || undefined,
       ch_return: value.ch_return || undefined,
       ch_valve: value.ch_valve || undefined,
@@ -1540,6 +1577,7 @@ class FjernvarmeCardEditor extends HTMLElement {
       dhw_status: value.dhw_status || undefined,
       circulation_temp: value.circulation_temp || undefined,
       circulation_status: value.circulation_status || undefined,
+      bvv_bypass_status: value.bvv_bypass_status || undefined,
       circulation_bypass_temp: value.circulation_bypass_temp || undefined,
       standby: value.standby || undefined,
       vacation: value.vacation || undefined,
