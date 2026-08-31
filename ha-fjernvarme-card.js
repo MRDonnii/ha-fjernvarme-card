@@ -392,8 +392,8 @@ var FjernvarmeCard = class extends HTMLElement {
 				sentio_call_active: "Heat call in progress",
 				sentio_fejl: "Heat call fault",
 				sentio_fejl_short: "Fault",
-				sentio_active_short: "Active",
-				sentio_inactive_short: "No call",
+				sentio_active_short: "Call",
+				sentio_inactive_short: "None",
 				auto_standby: "Auto standby",
 				auto_standby_active: "Auto standby enabled",
 				auto_standby_status: "Auto standby status",
@@ -401,7 +401,7 @@ var FjernvarmeCard = class extends HTMLElement {
 				auto_standby_fejl: "Auto standby fault",
 				auto_standby_fejl_short: "Fault",
 				auto_standby_active_short: "Active",
-				auto_standby_inactive_short: "Inactive"
+				auto_standby_inactive_short: "Off"
 			},
 			da: {
 				primary_supply: "FJF",
@@ -433,8 +433,8 @@ var FjernvarmeCard = class extends HTMLElement {
 				sentio_call_active: "Varmekald i gang",
 				sentio_fejl: "Varmekald fejl",
 				sentio_fejl_short: "Fejl",
-				sentio_active_short: "Aktiv",
-				sentio_inactive_short: "Intet kald",
+				sentio_active_short: "Kald",
+				sentio_inactive_short: "Intet",
 				auto_standby: "Auto standby",
 				auto_standby_active: "Automatisk standby aktiveret",
 				auto_standby_status: "Automatisk standby status",
@@ -442,7 +442,7 @@ var FjernvarmeCard = class extends HTMLElement {
 				auto_standby_fejl: "Automatisk standby fejl",
 				auto_standby_fejl_short: "Fejl",
 				auto_standby_active_short: "Aktiv",
-				auto_standby_inactive_short: "Inaktiv"
+				auto_standby_inactive_short: "Off"
 			}
 		};
 		return translations[this._language()]?.[key] || translations.en[key] || key;
@@ -907,7 +907,6 @@ var FjernvarmeCard = class extends HTMLElement {
 		if (this._entityId("auto_standby_status")) {
 			const rawStatus = this._state("auto_standby_status");
 			if (rawStatus === "Fejlsikring" || rawStatus === "Failsafe") return this._t("auto_standby_fejl_short");
-			if (rawStatus !== void 0) return this._humanizeState(rawStatus);
 		}
 		if (this._entityId("auto_standby_engaged")) return this._isOn("auto_standby_engaged") ? this._t("auto_standby_active_short") : this._t("auto_standby_inactive_short");
 		return "—";
@@ -1324,8 +1323,8 @@ var FjernvarmeCard = class extends HTMLElement {
 
             ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"), void 0, true, void 0, coolingRadius)}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), void 0, false)}
-            ${this._statusCircle(sentioDisplayKey, this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing())}
-            ${this._statusCircle(autoStandbyDisplayKey, this._t("auto_standby"), this._autoStandbyStatusText(), autoStandbyX, topRowY, "", true, this._autoStandbyRing())}
+            ${this._statusCircle(sentioDisplayKey, this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing(), "16px")}
+            ${this._statusCircle(autoStandbyDisplayKey, this._t("auto_standby"), this._autoStandbyStatusText(), autoStandbyX, topRowY, "", true, this._autoStandbyRing(), "16px")}
             ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), pressureX, topRowY, "", false, this._pressureRing(), void 0, true, void 0, pressureRadius)}
 
             ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
@@ -2005,7 +2004,7 @@ var FjernvarmeCardEditor = class extends HTMLElement {
 			form.computeLabel = (schema) => this._computeLabel(schema);
 			form.addEventListener("value-changed", (event) => this._valueChanged(event));
 		}
-		const schemaCacheKey = `${this._language()}:0.26.0-dual-flow-power`;
+		const schemaCacheKey = `${this._language()}:0.26.1-short-status`;
 		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
 			this._schemaCache = this._schema();
 			this._schemaCacheKey = schemaCacheKey;
@@ -2024,6 +2023,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.26.0-dual-flow-power";
+window.__FJERNVARME_CARD_VERSION__ = "0.26.1-short-status";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
