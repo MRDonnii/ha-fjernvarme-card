@@ -1,6 +1,6 @@
 {
   "name": "ha-fjernvarme-card",
-  "version": "0.1.49",
+  "version": "0.1.50",
   "description": "Home Assistant Lovelace card for a district heating (fjernvarme) unit — house-diagram layout with animated pipes.",
   "type": "module",
   "repository": {
