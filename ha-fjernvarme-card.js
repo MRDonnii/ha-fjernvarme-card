@@ -1013,6 +1013,18 @@ var FjernvarmeCard = class extends HTMLElement {
 		const unitX = bothFeatures ? centerX : hasFeatureCircle ? 255 : centerX;
 		const sentioX = bothFeatures ? 205 : 365;
 		const autoStandbyX = bothFeatures ? 415 : 365;
+		// Delta (primary_cooling) sits above the start of the primary pipe.
+		// When a flow entity is configured, shrink Delta and give Flow a
+		// matching circle right beside it, sharing that same spot instead of
+		// Delta having it alone - both sized down so the pair fits where one
+		// used to be.
+		const hasFlow = this._hasAnyEntity(["meter_flow"]);
+		const pairRadius = 30;
+		const pairGap = 4;
+		const pairOffset = pairRadius + pairGap / 2;
+		const coolingPairX = hasFlow ? coolingX - pairOffset : coolingX;
+		const flowX = coolingX + pairOffset;
+		const coolingDisplayRadius = hasFlow ? pairRadius : coolingRadius;
 		const primaryFlow = this._laneFlowState(["meter_flow"]);
 		const chFlow = this._laneFlowState(["ch_valve"]);
 		const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
@@ -1320,7 +1332,8 @@ var FjernvarmeCard = class extends HTMLElement {
               ${dhwLane.gradient}
             </defs>
 
-            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingX, topRowY, "", false, this._coolingStatusRing("primary_cooling"), void 0, true, void 0, coolingRadius)}
+            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingPairX, topRowY, "", false, this._coolingStatusRing("primary_cooling"), void 0, true, void 0, coolingDisplayRadius)}
+            ${hasFlow ? this._statusCircle("meter_flow", this._t("meter_flow_short"), this._formatFlowLitersPerHour("meter_flow"), flowX, topRowY, "", false, void 0, void 0, true, void 0, pairRadius) : ""}
             ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), void 0, false)}
             ${this._statusCircle(sentioDisplayKey, this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing(), "16px")}
             ${this._statusCircle(autoStandbyDisplayKey, this._t("auto_standby"), this._autoStandbyStatusText(), autoStandbyX, topRowY, "", true, this._autoStandbyRing(), "16px")}
@@ -2022,6 +2035,6 @@ window.customCards.push({
 	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
 	preview: true
 });
-window.__FJERNVARME_CARD_VERSION__ = "0.26.2-aligned-status-values";
+window.__FJERNVARME_CARD_VERSION__ = "0.27.0-flow-beside-delta";
 console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
 //#endregion
