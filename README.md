@@ -1,5 +1,7 @@
 # Fjernvarme Card
 
+![Preview](docs/preview.gif)
+
 A Home Assistant Lovelace card for a district heating (fjernvarme) unit, built around the
 entity layout exposed by Wavin Calefa / Sentio units and a Kamstrup wireless M-Bus billing
 meter — but any set of matching sensors will work.
