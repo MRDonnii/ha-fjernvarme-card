@@ -1,2040 +1,291 @@
-//#region src/fjernvarme-card.ts
-var _fvRebuiltCardKeys = /* @__PURE__ */ new Set();
-var FjernvarmeCard = class extends HTMLElement {
-	static getStubConfig(_hass, entities = []) {
-		const entityIds = Array.isArray(entities) ? entities.map((entity) => typeof entity === "string" ? entity : entity?.entity_id).filter(Boolean) : [];
-		const findEntity = (patterns, fallback) => entityIds.find((entityId) => patterns.some((pattern) => entityId.includes(pattern))) || fallback;
-		return {
-			entities: {
-				primary_supply: findEntity([
-					"fjernvarme_fremlob",
-					"fjernvarme_frem",
-					"district_heating_supply"
-				], void 0),
-				primary_return: findEntity(["fjernvarme_retur", "district_heating_return"], void 0),
-				primary_cooling: findEntity(["fjernvarme_afkoling", "afkoling"], void 0),
-				pressure: findEntity([
-					"anlaegstryk",
-					"sekundaertryk",
-					"pressure"
-				], void 0),
-				meter_energy_total: findEntity(["total_energy_consumption", "energi_total"], void 0),
-				meter_volume_total: findEntity(["total_volume"], void 0),
-				meter_flow: findEntity(["volume_flow"], void 0),
-				meter_power: findEntity([
-					"meter_power",
-					"heat_meter_power",
-					"current_power",
-					"aktuel_effekt"
-				], void 0),
-				ch_supply: findEntity(["cvv_fremlob"], void 0),
-				ch_return: findEntity(["cvv_retur"], void 0),
-				ch_valve: findEntity(["cvv_ventilposition"], void 0),
-				ch_flow: findEntity(["radiator_flow", "cvv_flow"], void 0),
-				ch_power: findEntity([
-					"radiator_effekt",
-					"radiator_power",
-					"cvv_effekt",
-					"cvv_power"
-				], void 0),
-				ch_outdoor: findEntity(["udetemperatur"], void 0),
-				ch_pump: findEntity(["heating_pump_status", "pumpe_status"], void 0),
-				dhw_cold_in: findEntity(["koldtvandsfoler", "cold_water"], void 0),
-				dhw_hot_out: findEntity(["brugsvand_ud", "dhw_out"], void 0),
-				dhw_flow: findEntity(["brugsvandsflow"], void 0),
-				dhw_power: findEntity([
-					"varmtvand_effekt",
-					"dhw_power",
-					"hot_water_power"
-				], void 0),
-				dhw_valve: findEntity(["ventilposition"], void 0),
-				dhw_setpoint: findEntity(["brugsvand_setpunkt"], void 0),
-				dhw_status: findEntity(["brugsvand_status"], void 0),
-				circulation_temp: findEntity(["circulation_temperature", "cirkulation_temperatur"], void 0),
-				circulation_status: findEntity(["cirkulation_status"], void 0),
-				bvv_bypass_status: findEntity([
-					"bvv_bypass_status",
-					"bvv_bypass",
-					"dhw_bypass"
-				], void 0),
-				circulation_bypass_temp: findEntity(["bypass_temperatur"], void 0),
-				standby: findEntity(["standby"], void 0),
-				vacation: findEntity(["ferie", "vacation"], void 0),
-				sentio_active: findEntity(["sentio_varmekald_aktiv"], void 0),
-				sentio_status: findEntity(["sentio_varmekald_status"], void 0),
-				sentio_call_active: findEntity(["sentio_kald_ejet"], void 0),
-				sentio_fejl: findEntity(["sentio_varmekald_fejl"], void 0),
-				auto_standby_active: findEntity(["auto_standby_enabled", "automatisk_standby"], void 0),
-				auto_standby_status: findEntity(["auto_standby_status"], void 0),
-				auto_standby_engaged: findEntity(["auto_standby_active"], void 0),
-				auto_standby_fejl: findEntity(["auto_standby_fault", "auto_standby_fejl"], void 0),
-				alarms: []
-			},
-			appearance: {
-				animation: true,
-				flow_animation: true,
-				show_labels: true,
-				show_temperatures: true,
-				compact: false,
-				swap_sides: true
-			},
-			temperature_thresholds: {
-				white: 5,
-				blue: 20,
-				green: 35,
-				yellow: 45,
-				orange: 55,
-				red: 65
-			},
-			cooling_target: {
-				optimal: 30,
-				tolerance: 5
-			}
-		};
-	}
-	static async getConfigElement() {
-		return document.createElement("fjernvarme-card-editor");
-	}
-	constructor() {
-		super();
-		this.attachShadow({ mode: "open" });
-		this._config = {};
-		this._hass = void 0;
-		this._id = `fv-${Math.random().toString(36).slice(2, 10)}`;
-		this._lastRenderSignature = "";
-		this._animEpoch = Date.now();
-		this._resizeObserver = void 0;
-	}
-	connectedCallback() {
-		if (!this._resizeObserver && typeof ResizeObserver !== "undefined") {
-			this._resizeObserver = new ResizeObserver(() => this._requestRebuildIfNeeded());
-			this._resizeObserver.observe(this);
-		}
-	}
-	disconnectedCallback() {
-		this._resizeObserver?.disconnect();
-		this._resizeObserver = void 0;
-	}
-	_cardIdentityKey() {
-		try {
-			return JSON.stringify(this._config?.entities || {});
-		} catch {
-			return "";
-		}
-	}
-	_requestRebuildIfNeeded() {
-		const key = this._cardIdentityKey();
-		if (!key || _fvRebuiltCardKeys.has(key)) return;
-		_fvRebuiltCardKeys.add(key);
-		this.dispatchEvent(new CustomEvent("ll-rebuild", {
-			bubbles: true,
-			composed: true
-		}));
-	}
-	_phaseDelay(durationSeconds, offsetSeconds = 0) {
-		if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return "0s";
-		return `${(-((((Date.now() - this._animEpoch) / 1e3 + offsetSeconds) % durationSeconds + durationSeconds) % durationSeconds)).toFixed(3)}s`;
-	}
-	setConfig(config) {
-		if (!config) throw new Error("Invalid configuration");
-		this._config = {
-			entities: {},
-			appearance: {
-				animation: true,
-				flow_animation: true,
-				show_labels: true,
-				show_temperatures: true,
-				compact: false
-			},
-			...config,
-			entities: {
-				alarms: [],
-				...config.entities || {}
-			},
-			temperature_thresholds: {
-				white: 5,
-				blue: 20,
-				green: 35,
-				yellow: 45,
-				orange: 55,
-				red: 65,
-				...config.temperature_thresholds || {}
-			},
-			cooling_target: {
-				optimal: 30,
-				tolerance: 5,
-				...config.cooling_target || {}
-			},
-			appearance: {
-				animation: true,
-				flow_animation: true,
-				show_labels: true,
-				show_temperatures: true,
-				compact: false,
-				...config.appearance || {}
-			}
-		};
-		this._lastRenderSignature = "";
-		this._render();
-	}
-	set hass(hass) {
-		this._hass = hass;
-		if (this._renderSignature() === this._lastRenderSignature) return;
-		this._render();
-	}
-	getCardSize() {
-		const measuredHeight = (this.shadowRoot?.querySelector("ha-card"))?.getBoundingClientRect?.().height;
-		const height = Number.isFinite(measuredHeight) && measuredHeight > 0 ? measuredHeight : this._cardHeightForWidth(this._currentCardWidth());
-		return Math.max(1, Math.ceil((height + 12) / 50));
-	}
-	getGridOptions() {
-		return {
-			rows: "auto",
-			columns: 12,
-			min_columns: 6
-		};
-	}
-	_currentCardWidth() {
-		const card = this.shadowRoot?.querySelector("ha-card");
-		return this.getBoundingClientRect?.().width || card?.getBoundingClientRect?.().width || this.parentElement?.getBoundingClientRect?.().width || 0;
-	}
-	_diagramHeight() {
-		return 522;
-	}
-	_cardHeightForWidth(width) {
-		const compact = this._config?.appearance?.compact === true;
-		return (compact ? 10 : 18) + Math.max(0, (Number.isFinite(width) && width > 0 ? width : compact ? 360 : 500) - (compact ? 6 : 10)) * (this._diagramHeight() / 620);
-	}
-	_renderSignature() {
-		const entityKeys = [
-			"primary_supply",
-			"primary_return",
-			"primary_cooling",
-			"pressure",
-			"meter_energy_total",
-			"meter_volume_total",
-			"meter_flow",
-			"meter_power",
-			"ch_supply",
-			"ch_return",
-			"ch_valve",
-			"ch_flow",
-			"ch_power",
-			"ch_outdoor",
-			"ch_pump",
-			"dhw_cold_in",
-			"dhw_hot_out",
-			"dhw_flow",
-			"dhw_power",
-			"dhw_valve",
-			"dhw_setpoint",
-			"dhw_status",
-			"circulation_temp",
-			"circulation_status",
-			"bvv_bypass_status",
-			"circulation_bypass_temp",
-			"standby",
-			"vacation",
-			"sentio_active",
-			"sentio_status",
-			"sentio_call_active",
-			"sentio_fejl",
-			"auto_standby_active",
-			"auto_standby_status",
-			"auto_standby_engaged",
-			"auto_standby_fejl"
-		];
-		const appearance = this._config?.appearance || {};
-		const entities = this._config?.entities || {};
-		const alarms = Array.isArray(entities.alarms) ? entities.alarms : [];
-		const stateParts = entityKeys.map((key) => {
-			const entityId = entities[key] || "";
-			const entity = entityId && this._hass ? this._hass.states[entityId] : void 0;
-			return [
-				key,
-				entityId,
-				entity?.state ?? "",
-				entity?.attributes?.unit_of_measurement ?? ""
-			].join(":");
-		});
-		const alarmParts = alarms.map((entityId) => {
-			return `${entityId}:${(entityId && this._hass ? this._hass.states[entityId] : void 0)?.state ?? ""}`;
-		});
-		return JSON.stringify({
-			appearance,
-			language: this._language(),
-			temperatureThresholds: this._config?.temperature_thresholds || {},
-			states: stateParts,
-			alarms: alarmParts
-		});
-	}
-	_entityId(key) {
-		return this._config?.entities?.[key];
-	}
-	_entity(key) {
-		const entityId = this._entityId(key);
-		return entityId && this._hass ? this._hass.states[entityId] : void 0;
-	}
-	_state(key) {
-		const entity = this._entity(key);
-		if (!entity || entity.state === "unknown" || entity.state === "unavailable") return;
-		return entity.state;
-	}
-	_number(key) {
-		const value = Number.parseFloat(String(this._state(key)).replace(",", "."));
-		return Number.isFinite(value) ? value : void 0;
-	}
-	_unit(key, fallback = "") {
-		return this._entity(key)?.attributes?.unit_of_measurement || fallback;
-	}
-	_escapeHtml(value) {
-		return value?.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;") || "";
-	}
-	_svgEntityAttrs(entityKey, extraClass = "") {
-		const entityId = this._entityId(entityKey);
-		const className = ["entity-hit", extraClass].filter(Boolean).join(" ");
-		return entityId ? `class="${className}" data-entity="${entityId}"` : extraClass ? `class="${extraClass}"` : "";
-	}
-	_fireMoreInfo(entityId) {
-		this.dispatchEvent(new CustomEvent("hass-more-info", {
-			detail: { entityId },
-			bubbles: true,
-			composed: true
-		}));
-	}
-	_formatTemp(key) {
-		const value = this._number(key);
-		if (value === void 0) return "—";
-		return `${value.toFixed(1)}${this._unit(key, "°C")}`;
-	}
-	_formatNumber(key, decimals = 0, suffix = "") {
-		const value = this._number(key);
-		if (value === void 0) return "—";
-		return `${value.toFixed(decimals)}${suffix}`;
-	}
-	_formatWithUnit(key, decimals = 1, fallbackUnit = "") {
-		const value = this._number(key);
-		if (value === void 0) return "—";
-		return `${value.toFixed(decimals)} ${this._unit(key, fallbackUnit)}`;
-	}
-	_formatFlowLitersPerHour(key) {
-		const value = this._number(key);
-		if (value === void 0) return "—";
-		const unit = this._unit(key, "L/h").toString().trim().toLowerCase();
-		const litersPerHour = [
-			"m³/h",
-			"m3/h",
-			"m³/t",
-			"m3/t"
-		].includes(unit) ? value * 1e3 : value;
-		return `${Math.round(litersPerHour)} L/h`;
-	}
-	_formatPowerKilowatts(key) {
-		const value = this._number(key);
-		if (value === void 0) return "—";
-		return `${(this._unit(key, "kW").toString().trim().toLowerCase() === "w" ? value / 1e3 : value).toFixed(1)} kW`;
-	}
-	_formatDisplayState(key) {
-		const entity = this._entity(key);
-		if (!entity || entity.state === "unknown" || entity.state === "unavailable") return "—";
-		return this._humanizeState(entity.state);
-	}
-	_humanizeState(state) {
-		return state.toString().replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-	}
-	_isOn(key) {
-		const state = this._state(key);
-		return state !== void 0 && [
-			"on",
-			"true",
-			"1",
-			"open",
-			"åben",
-			"aaben",
-			"til",
-			"aktiv",
-			"active",
-			"bypass"
-		].includes(state.toString().trim().toLowerCase());
-	}
-	_language() {
-		return (this._hass?.locale?.language || this._hass?.language || "en").toString().toLowerCase().startsWith("da") ? "da" : "en";
-	}
-	_t(key) {
-		const translations = {
-			en: {
-				primary_supply: "Supply",
-				primary_return: "Return",
-				ch_return: "CH Return",
-				ch_supply: "CH Supply",
-				dhw_cold_in: "Cold",
-				dhw_hot_out: "Hot",
-				circulation_bypass_temp: "Bypass",
-				circulation_temp: "Circ.",
-				cooling: "Cooling",
-				pressure: "Pressure",
-				unit: "Calefa",
-				alarms: "Alarms",
-				standby: "Standby",
-				vacation: "Vacation",
-				pump: "Pump",
-				outdoor: "Outdoor",
-				ok: "OK",
-				fault: "Alarm",
-				off: "Off",
-				on: "On",
-				meter_summary: "Meter",
-				meter_flow_short: "Flow",
-				meter_power_short: "Power",
-				sentio: "Heat call",
-				sentio_active: "Heat call enabled",
-				sentio_status: "Heat call status",
-				sentio_call_active: "Heat call in progress",
-				sentio_fejl: "Heat call fault",
-				sentio_fejl_short: "Fault",
-				sentio_active_short: "Call",
-				sentio_inactive_short: "None",
-				auto_standby: "Auto standby",
-				auto_standby_active: "Auto standby enabled",
-				auto_standby_status: "Auto standby status",
-				auto_standby_engaged: "Auto standby holding unit",
-				auto_standby_fejl: "Auto standby fault",
-				auto_standby_fejl_short: "Fault",
-				auto_standby_active_short: "Active",
-				auto_standby_inactive_short: "Off"
-			},
-			da: {
-				primary_supply: "FJF",
-				primary_return: "FJR",
-				ch_return: "CVV Retur",
-				ch_supply: "CVV Frem",
-				dhw_cold_in: "KV",
-				dhw_hot_out: "BV",
-				circulation_bypass_temp: "Bypass",
-				circulation_temp: "Cirk.",
-				cooling: "Afkøling",
-				pressure: "Tryk",
-				unit: "Calefa",
-				alarms: "Alarmer",
-				standby: "Standby",
-				vacation: "Ferie",
-				pump: "Pumpe",
-				outdoor: "Ude",
-				ok: "OK",
-				fault: "Alarm",
-				off: "Fra",
-				on: "Til",
-				meter_summary: "Måler",
-				meter_flow_short: "Flow",
-				meter_power_short: "Effekt",
-				sentio: "Varmekald",
-				sentio_active: "Varmekald aktiveret",
-				sentio_status: "Varmekald status",
-				sentio_call_active: "Varmekald i gang",
-				sentio_fejl: "Varmekald fejl",
-				sentio_fejl_short: "Fejl",
-				sentio_active_short: "Kald",
-				sentio_inactive_short: "Intet",
-				auto_standby: "Auto standby",
-				auto_standby_active: "Automatisk standby aktiveret",
-				auto_standby_status: "Automatisk standby status",
-				auto_standby_engaged: "Automatisk standby holder enheden",
-				auto_standby_fejl: "Automatisk standby fejl",
-				auto_standby_fejl_short: "Fejl",
-				auto_standby_active_short: "Aktiv",
-				auto_standby_inactive_short: "Off"
-			}
-		};
-		return translations[this._language()]?.[key] || translations.en[key] || key;
-	}
-	_temperatureThresholds() {
-		const configured = this._config?.temperature_thresholds || {};
-		return Object.fromEntries(Object.entries({
-			white: 5,
-			blue: 20,
-			green: 35,
-			yellow: 45,
-			orange: 55,
-			red: 65
-		}).map(([key, fallback]) => {
-			const value = Number.parseFloat(configured[key]);
-			return [key, Number.isFinite(value) ? value : fallback];
-		}));
-	}
-	_temperatureChannels(value) {
-		if (!Number.isFinite(value)) return [
-			136,
-			144,
-			153
-		];
-		const thresholds = this._temperatureThresholds();
-		const stops = [
-			{
-				value: thresholds.white,
-				color: [
-					248,
-					252,
-					255
-				]
-			},
-			{
-				value: thresholds.blue,
-				color: [
-					47,
-					128,
-					237
-				]
-			},
-			{
-				value: thresholds.green,
-				color: [
-					67,
-					160,
-					71
-				]
-			},
-			{
-				value: thresholds.yellow,
-				color: [
-					244,
-					208,
-					63
-				]
-			},
-			{
-				value: thresholds.orange,
-				color: [
-					242,
-					153,
-					74
-				]
-			},
-			{
-				value: thresholds.red,
-				color: [
-					219,
-					68,
-					55
-				]
-			}
-		].sort((a, b) => a.value - b.value);
-		if (value <= stops[0].value) return stops[0].color;
-		if (value >= stops[stops.length - 1].value) return stops[stops.length - 1].color;
-		for (let index = 0; index < stops.length - 1; index += 1) {
-			const from = stops[index];
-			const to = stops[index + 1];
-			if (value >= from.value && value <= to.value) {
-				const span = Math.max(.1, to.value - from.value);
-				const ratio = (value - from.value) / span;
-				return from.color.map((channel, channelIndex) => Math.round(channel + (to.color[channelIndex] - channel) * ratio));
-			}
-		}
-		return stops[2].color;
-	}
-	_rgb(channels) {
-		return `rgb(${channels.join(", ")})`;
-	}
-	_temperatureColor(value) {
-		if (!Number.isFinite(value)) return "var(--secondary-text-color, currentColor)";
-		return this._rgb(this._temperatureChannels(value));
-	}
-	_gradient(id, from, to, x1 = "0%", x2 = "100%", y = "0", gradientUnits = "") {
-		const fromValue = Number.isFinite(Number(from)) ? Number(from) : Number(to);
-		const toValue = Number.isFinite(Number(to)) ? Number(to) : Number(from);
-		const midValue = Number.isFinite(fromValue) && Number.isFinite(toValue) ? (fromValue + toValue) / 2 : void 0;
-		return `
-      <linearGradient id="${id}" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}"${gradientUnits ? ` gradientUnits="${gradientUnits}"` : ""}>
-        <stop offset="0%" stop-color="${this._temperatureColor(fromValue)}"></stop>
-        <stop offset="52%" stop-color="${this._temperatureColor(midValue)}"></stop>
-        <stop offset="100%" stop-color="${this._temperatureColor(toValue)}"></stop>
-      </linearGradient>
-    `;
-	}
-	_flowAnimationEnabled() {
-		const appearance = this._config?.appearance || {};
-		return (appearance.flow_animation ?? appearance.animation) !== false;
-	}
-	_laneFlowState(signalKeys) {
-		if (!this._flowAnimationEnabled()) return {
-			duration: "0s",
-			stopped: true
-		};
-		let hasSignal = false;
-		let anyActive = false;
-		for (const key of signalKeys) {
-			if (!this._entityId(key)) continue;
-			const value = this._number(key);
-			if (Number.isFinite(value)) {
-				hasSignal = true;
-				if (value > 0) anyActive = true;
-				continue;
-			}
-			if (this._state(key) !== void 0) {
-				hasSignal = true;
-				if (this._isOn(key)) anyActive = true;
-			}
-		}
-		if (!hasSignal) return {
-			duration: "3.4s",
-			stopped: false
-		};
-		return anyActive ? {
-			duration: "3.4s",
-			stopped: false
-		} : {
-			duration: "0s",
-			stopped: true
-		};
-	}
-	_airLines(path, duration, stopped, reversed = false) {
-		const variants = [
-			{
-				offset: -8,
-				width: 2.4,
-				alpha: .8,
-				dash: 22,
-				gap: 90,
-				flowDelay: -.2,
-				waveDelay: -.7,
-				wave: 2.4
-			},
-			{
-				offset: 0,
-				width: 2,
-				alpha: .7,
-				dash: 16,
-				gap: 70,
-				flowDelay: -1.2,
-				waveDelay: -1.8,
-				wave: 2.8
-			},
-			{
-				offset: 8,
-				width: 2.2,
-				alpha: .75,
-				dash: 20,
-				gap: 100,
-				flowDelay: -1.9,
-				waveDelay: -1.1,
-				wave: 2.6
-			}
-		];
-		const durationSeconds = Number.parseFloat(duration);
-		const reverseClass = reversed ? " reverse" : "";
-		return variants.map((variant) => `
-              <g class="fv-air-band ${stopped ? "stopped" : ""}" style="--air-wave:${variant.wave}px; animation-delay:${this._phaseDelay(9.4, variant.waveDelay)};">
-                <path
-                  class="fv-air-line${reverseClass} ${stopped ? "stopped" : ""}"
-                  style="--flow-duration:${duration}; --air-alpha:${variant.alpha}; --air-flow-delay:${this._phaseDelay(durationSeconds, variant.flowDelay)};"
-                  stroke-width="${variant.width}"
-                  stroke-dasharray="${variant.dash} ${variant.gap}"
-                  transform="translate(0 ${variant.offset})"
-                  d="${path}"
-                ></path>
-              </g>`).join("");
-	}
-	_statusCircle(entityKey, label, value, x, y, valueClass = "", large = false, ring = void 0, valueFontSizeOverride = void 0, requireEntity = true, bgColor = void 0, radiusOverride = void 0) {
-		if (requireEntity && !this._entityId(entityKey)) return "";
-		const textClass = ["status-value", valueClass].filter(Boolean).join(" ");
-		const w = (radiusOverride ?? (large ? 50 : 42)) * 2;
-		const half = w / 2;
-		const rx = large ? 20 : 16;
-		const ringW = w - 8;
-		const ringHalf = ringW / 2;
-		const ringRx = Math.max(rx - 4, 0);
-		const boxClass = large ? "status-circle status-circle-large" : "status-circle";
-		const rimClass = large ? "status-circle-rim status-circle-rim-large" : "status-circle-rim";
-		const glossCx = large ? -20 : -17;
-		const glossCy = large ? -28 : -24;
-		const glossRx = large ? 32 : 26;
-		const glossRy = large ? 16 : 14;
-		const labelY = large ? -18 : -15;
-		const valueY = large ? 15 : 14;
-		const valueLength = this._humanizeState(value || "").length;
-		const valueFontSize = valueFontSizeOverride || (large ? valueLength > 12 ? "11px" : valueLength > 9 ? "13px" : valueLength > 6 ? "16px" : "18px" : valueLength > 9 ? "11px" : valueLength > 6 ? "13px" : "16px");
-		const bgStyle = bgColor ? ` style="fill:${bgColor};"` : "";
-		const spaceIndex = label.indexOf(" ");
-		const labelMarkup = spaceIndex > 0 && label.length > 10 ? `<text x="0" y="${labelY - 5}" text-anchor="middle" class="status-label"><tspan x="0" dy="0">${this._escapeHtml(label.slice(0, spaceIndex))}</tspan><tspan x="0" dy="10">${this._escapeHtml(label.slice(spaceIndex + 1))}</tspan></text>` : `<text x="0" y="${labelY}" text-anchor="middle" class="status-label">${this._escapeHtml(label)}</text>`;
-		const adjustedValueY = valueY;
-		return `
-            <g ${this._svgEntityAttrs(entityKey)} tabindex="0" transform="translate(${x} ${y})">
-              <rect class="${boxClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"${bgStyle}></rect>
-              <ellipse class="status-circle-gloss" cx="${glossCx}" cy="${glossCy}" rx="${glossRx}" ry="${glossRy}"></ellipse>
-              ${ring ? `
-                <rect class="status-ring-bg" x="${-ringHalf}" y="${-ringHalf}" width="${ringW}" height="${ringW}" rx="${ringRx}" pathLength="100"></rect>
-                <rect class="status-ring ${ring.colorClass || ""}" x="${-ringHalf}" y="${-ringHalf}" width="${ringW}" height="${ringW}" rx="${ringRx}" pathLength="100" stroke-dasharray="${ring.progress} 100"${ring.color ? ` style="stroke:${ring.color} !important;"` : ""}></rect>
-              ` : ""}
-              <rect class="${rimClass}" x="${-half}" y="${-half}" width="${w}" height="${w}" rx="${rx}"></rect>
-              ${labelMarkup}
-              <text x="0" y="${adjustedValueY}" text-anchor="middle" class="${textClass}" style="font-size:${valueFontSize};">${this._escapeHtml(value)}</text>
-            </g>
-    `;
-	}
-	_laneBadgeSvg(key, x, y, iconType, valueText, bgColor = void 0) {
-		if (!this._entityId(key)) return "";
-		const icons = {
-			exchanger: `<path class="badge-icon-stroke" d="M-9 -7 L-3 6 L3 -6 L9 7" fill="none"></path>`,
-			radiator: `
-        <rect x="-10" y="-6" width="20" height="12" rx="1.5" class="badge-icon-fill"></rect>
-        <line x1="-7" y1="-4" x2="-7" y2="4" class="badge-icon-line"></line>
-        <line x1="-3.5" y1="-4" x2="-3.5" y2="4" class="badge-icon-line"></line>
-        <line x1="0" y1="-4" x2="0" y2="4" class="badge-icon-line"></line>
-        <line x1="3.5" y1="-4" x2="3.5" y2="4" class="badge-icon-line"></line>
-        <line x1="7" y1="-4" x2="7" y2="4" class="badge-icon-line"></line>
-        <line x1="-7" y1="6" x2="-7" y2="8.5" class="badge-icon-stroke"></line>
-        <line x1="7" y1="6" x2="7" y2="8.5" class="badge-icon-stroke"></line>
-      `,
-			droplet: `<path class="badge-icon-fill" d="M0 -9 C5 -2 5.5 6 0 8.5 C-5.5 6 -5 -2 0 -9 Z"></path>`,
-			power: `<path class="badge-icon-fill" d="M2 -10 L-8 2 H-1 L-4 10 L9 -3 H2 Z"></path>`,
-			pump: `
-        <path class="badge-icon-stroke" d="M-7 -2 A7 7 0 1 1 -6 4" fill="none"></path>
-        <path class="badge-icon-fill" d="M-9 3 L-4 7 L-3 0 Z"></path>
-      `
-		};
-		const bgStyle = bgColor ? ` style="fill:${bgColor}; fill-opacity:.85;"` : "";
-		return `
-            <g ${this._svgEntityAttrs(key)} tabindex="0" transform="translate(${x} ${y})">
-              <rect x="-24" y="-27" width="48" height="54" rx="9" class="badge-box"${bgStyle}></rect>
-              <g transform="translate(0 -9)">${icons[iconType] || ""}</g>
-              <text x="0" y="19" text-anchor="middle" class="badge-value">${this._escapeHtml(valueText)}</text>
-            </g>
-    `;
-	}
-	_primaryMetricsBadgeSvg(x, y) {
-		const metrics = [
-			[
-				"primary_cooling",
-				this._t("cooling"),
-				this._formatWithUnit("primary_cooling", 1, "")
-			],
-			[
-				"meter_flow",
-				this._t("meter_flow_short"),
-				this._formatFlowLitersPerHour("meter_flow")
-			],
-			[
-				"meter_power",
-				this._t("meter_power_short"),
-				this._formatPowerKilowatts("meter_power")
-			]
-		].filter(([key]) => this._entityId(key));
-		if (!metrics.length) return "";
-		const rowHeight = 18;
-		const height = metrics.length * rowHeight + 12;
-		const startY = -(metrics.length - 1) * rowHeight / 2;
-		const rows = metrics.map(([key, label, value], index) => `
-              <text ${this._svgEntityAttrs(key)} tabindex="0" x="0" y="${startY + index * rowHeight + 4}" text-anchor="middle" class="badge-value primary-metric">
-                <tspan class="primary-metric-label">${this._escapeHtml(label)} </tspan>${this._escapeHtml(value)}
-              </text>`).join("");
-		return `
-            <g transform="translate(${x} ${y})">
-              <rect x="-58" y="${-height / 2}" width="116" height="${height}" rx="9" class="badge-box" style="fill:${this._coolingBackgroundColor("primary_cooling")}; fill-opacity:.88;"></rect>
-              ${rows}
-            </g>
-    `;
-	}
-	_lanePipe(id, x1, x2, y, fromKey, toKey, duration, stopped, reversed = false) {
-		const path = `M${x1} ${y} H${x2}`;
-		const fromValue = this._number(fromKey);
-		const toValue = this._number(toKey);
-		const stoppedClass = stopped ? " stopped" : "";
-		const fadeGradientId = `${id}-fade-gradient`;
-		const maskId = `${id}-fade-mask`;
-		return {
-			gradient: `
-        ${this._gradient(id, fromValue, toValue, x1, x2, y, "userSpaceOnUse")}
-        <linearGradient id="${fadeGradientId}" x1="${x1}" y1="0" x2="${x2}" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="black"></stop>
-          <stop offset="10%" stop-color="white"></stop>
-          <stop offset="90%" stop-color="white"></stop>
-          <stop offset="100%" stop-color="black"></stop>
-        </linearGradient>
-        <mask id="${maskId}" maskUnits="userSpaceOnUse" x="${x1 - 10}" y="${y - 40}" width="${x2 - x1 + 20}" height="80">
-          <rect x="${x1 - 10}" y="${y - 40}" width="${x2 - x1 + 20}" height="80" fill="url(#${fadeGradientId})"></rect>
-        </mask>
-      `,
-			markup: `
-              <g mask="url(#${maskId})">
-                <path class="duct-bg" d="${path}"></path>
-                <path class="flow-glow${stoppedClass}" stroke="url(#${id})" d="${path}"></path>
-                <path class="flow${stoppedClass}" stroke="url(#${id})" d="${path}"></path>
-                ${this._airLines(path, duration, stopped, reversed)}
-              </g>
-      `
-		};
-	}
-	_bypassLoop(id, xStart, xEnd, pipeY, pipeEdgeOffset, dipDepth, tempKey, statusKey, duration, stopped) {
-		if (stopped) return "";
-		if (!this._entityId(statusKey) && !this._entityId(tempKey)) return "";
-		const junctionY = pipeY + pipeEdgeOffset;
-		const dipY = junctionY + dipDepth;
-		const path = `M${xStart} ${junctionY} Q ${xStart} ${dipY} ${(xStart + xEnd) / 2} ${dipY} Q ${xEnd} ${dipY} ${xEnd} ${junctionY}`;
-		const temp = this._number(tempKey);
-		const color = Number.isFinite(temp) ? this._temperatureColor(temp) : "var(--fv-muted)";
-		const junctionColor = "color-mix(in srgb, var(--fv-text) 30%, transparent)";
-		return `
-              <g class="bypass-loop">
-                <path class="bypass-duct-bg" d="${path}"></path>
-                <path class="bypass-flow" stroke="${color}" style="--bypass-duration:${duration};" d="${path}"></path>
-                <circle cx="${xStart}" cy="${junctionY}" r="4" fill="${junctionColor}"></circle>
-                <circle cx="${xEnd}" cy="${junctionY}" r="4" fill="${junctionColor}"></circle>
-              </g>
-    `;
-	}
-	_isBypassActive() {
-		const state = this._state("bvv_bypass_status");
-		if (state === void 0) return false;
-		return [
-			"on",
-			"true",
-			"1",
-			"til",
-			"aktiv",
-			"active",
-			"åben",
-			"aaben",
-			"open",
-			"bypass aktiv",
-			"bypass active"
-		].includes(state.toString().trim().toLowerCase());
-	}
-	_pressureRing() {
-		const value = this._number("pressure");
-		if (!this._entityId("pressure") || !Number.isFinite(value)) return void 0;
-		if (value < .5) return {
-			progress: 100,
-			colorClass: "danger"
-		};
-		if (value < .8) return {
-			progress: 100,
-			colorClass: "warn"
-		};
-		return {
-			progress: 100,
-			colorClass: ""
-		};
-	}
-	_alarmEntityIds() {
-		const alarms = this._config?.entities?.alarms;
-		return Array.isArray(alarms) ? alarms.filter(Boolean) : [];
-	}
-	_activeAlarmCount() {
-		const ids = this._alarmEntityIds();
-		if (!this._hass) return 0;
-		return ids.filter((entityId) => {
-			const state = this._hass.states[entityId]?.state;
-			return state === "on" || state === "problem";
-		}).length;
-	}
-	_overallRing() {
-		const alarmCount = this._activeAlarmCount();
-		const pressure = this._number("pressure");
-		if (alarmCount > 0) return {
-			progress: 100,
-			colorClass: "danger"
-		};
-		if (Number.isFinite(pressure) && pressure < .5) return {
-			progress: 100,
-			colorClass: "danger"
-		};
-		if (Number.isFinite(pressure) && pressure < .8) return {
-			progress: 100,
-			colorClass: "warn"
-		};
-		return {
-			progress: 100,
-			colorClass: ""
-		};
-	}
-	_overallStatusText() {
-		const alarmCount = this._activeAlarmCount();
-		if (alarmCount > 0) return this._alarmEntityIds().length === 1 ? this._t("fault") : `${alarmCount} ${this._t("fault")}`;
-		if (this._isOn("standby")) return this._t("standby");
-		return this._t("ok");
-	}
-	_sentioRing() {
-		if (!this._hasAnyEntity([
-			"sentio_status",
-			"sentio_call_active",
-			"sentio_fejl",
-			"sentio_active"
-		])) return void 0;
-		if (this._isOn("sentio_fejl")) return {
-			progress: 100,
-			colorClass: "danger"
-		};
-		if (this._isOn("sentio_call_active")) return {
-			progress: 100,
-			colorClass: "info"
-		};
-		return {
-			progress: 100,
-			colorClass: ""
-		};
-	}
-	_hasAnyEntity(keys) {
-		return keys.some((key) => !!this._entityId(key));
-	}
-	_sentioStatusText() {
-		if (this._isOn("sentio_fejl")) return this._t("sentio_fejl_short");
-		if (this._isOn("sentio_call_active")) return this._t("sentio_active_short");
-		if (this._entityId("sentio_call_active")) return this._t("sentio_inactive_short");
-		return "—";
-	}
-	_autoStandbyRing() {
-		if (!this._hasAnyEntity([
-			"auto_standby_status",
-			"auto_standby_engaged",
-			"auto_standby_fejl",
-			"auto_standby_active"
-		])) return void 0;
-		if (this._isOn("auto_standby_fejl")) return {
-			progress: 100,
-			colorClass: "danger"
-		};
-		if (this._isOn("auto_standby_engaged")) return {
-			progress: 100,
-			colorClass: "info"
-		};
-		return {
-			progress: 100,
-			colorClass: ""
-		};
-	}
-	_autoStandbyStatusText() {
-		if (this._isOn("auto_standby_fejl")) return this._t("auto_standby_fejl_short");
-		if (this._entityId("auto_standby_status")) {
-			const rawStatus = this._state("auto_standby_status");
-			if (rawStatus === "Fejlsikring" || rawStatus === "Failsafe") return this._t("auto_standby_fejl_short");
-		}
-		if (this._entityId("auto_standby_engaged")) return this._isOn("auto_standby_engaged") ? this._t("auto_standby_active_short") : this._t("auto_standby_inactive_short");
-		return "—";
-	}
-	_onOffRing(key, invert = false) {
-		if (!this._entityId(key)) return void 0;
-		const on = this._isOn(key);
-		return {
-			progress: 100,
-			colorClass: (invert ? !on : on) ? "info" : ""
-		};
-	}
-	_numericActivityRing(key, threshold = 0) {
-		if (!this._entityId(key)) return void 0;
-		const value = this._number(key);
-		if (!Number.isFinite(value)) return void 0;
-		return {
-			progress: 100,
-			colorClass: value > threshold ? "info" : ""
-		};
-	}
-	_temperatureRing(key) {
-		if (!this._entityId(key)) return void 0;
-		const value = this._number(key);
-		if (!Number.isFinite(value)) return void 0;
-		return {
-			progress: 100,
-			color: this._temperatureColor(value)
-		};
-	}
-	_coolingDeviation(key) {
-		const value = this._number(key);
-		if (!Number.isFinite(value)) return void 0;
-		const target = this._config?.cooling_target || {};
-		const optimal = Number.isFinite(target.optimal) ? target.optimal : 30;
-		return {
-			value,
-			optimal,
-			tolerance: Number.isFinite(target.tolerance) && target.tolerance > 0 ? target.tolerance : 5,
-			deviation: Math.abs(value - optimal)
-		};
-	}
-	_primaryHasFlow() {
-		if (!this._entityId("meter_flow")) return true;
-		const flow = this._number("meter_flow");
-		return Number.isFinite(flow) ? flow > 0 : true;
-	}
-	_coolingBackgroundColor(key) {
-		const info = this._coolingDeviation(key);
-		if (!info) return void 0;
-		if (!this._primaryHasFlow()) return "var(--fv-muted)";
-		const ratio = Math.max(0, Math.min(1, (info.deviation - info.tolerance) / (info.tolerance * 2)));
-		const good = [
-			67,
-			160,
-			71
-		];
-		const bad = [
-			219,
-			68,
-			55
-		];
-		return `rgb(${good.map((channel, index) => Math.round(channel + (bad[index] - channel) * ratio)).join(", ")})`;
-	}
-	_coolingStatusRing(key) {
-		if (!this._coolingDeviation(key)) return void 0;
-		return {
-			progress: 100,
-			color: this._coolingBackgroundColor(key)
-		};
-	}
-	_render() {
-		if (!this.shadowRoot || !this._config) return;
-		this._lastRenderSignature = this._renderSignature();
-		const compact = this._config.appearance.compact === true;
-		const hasLabels = this._config.appearance.show_labels !== false;
-		const hasTemps = this._config.appearance.show_temperatures !== false;
-		const animationOff = !this._flowAnimationEnabled();
-		const centerX = 310;
-		const gPrimary = `${this._id}-primary`;
-		const gCh = `${this._id}-ch`;
-		const gDhw = `${this._id}-dhw`;
-		const laneY1 = 154;
-		const laneY2 = 234;
-		const laneY3 = 314;
-		const bypassEdgeOffset = 27;
-		const bypassDipDepth = 46;
-		const bypassDipY = 387;
-		const topRowY = 56;
-		const bottomRowY = 472;
-		const hasSentio = this._hasAnyEntity(["sentio_call_active", "sentio_fejl"]);
-		const hasAutoStandby = this._hasAnyEntity([
-			"auto_standby_status",
-			"auto_standby_engaged",
-			"auto_standby_fejl"
-		]);
-		const sentioDisplayKey = this._entityId("sentio_call_active") ? "sentio_call_active" : "sentio_fejl";
-		const autoStandbyDisplayKey = this._entityId("auto_standby_status") ? "auto_standby_status" : this._entityId("auto_standby_engaged") ? "auto_standby_engaged" : "auto_standby_fejl";
-		const hasFeatureCircle = hasSentio || hasAutoStandby;
-		const bothFeatures = hasSentio && hasAutoStandby;
-		const coolingRadius = bothFeatures ? 40 : void 0;
-		const pressureRadius = bothFeatures ? 40 : void 0;
-		const coolingX = hasFeatureCircle ? 110 : 160;
-		const pressureX = hasFeatureCircle ? 510 : 460;
-		const unitX = bothFeatures ? centerX : hasFeatureCircle ? 255 : centerX;
-		const sentioX = bothFeatures ? 205 : 365;
-		const autoStandbyX = bothFeatures ? 415 : 365;
-		// Delta (primary_cooling) sits above the start of the primary pipe.
-		// When a flow entity is configured, shrink Delta and give Flow a
-		// matching circle right beside it, sharing that same spot instead of
-		// Delta having it alone - both sized down so the pair fits where one
-		// used to be.
-		const hasFlow = this._hasAnyEntity(["meter_flow"]);
-		const pairRadius = 30;
-		const pairGap = 4;
-		const pairOffset = pairRadius + pairGap / 2;
-		const coolingPairX = hasFlow ? coolingX - pairOffset : coolingX;
-		const flowX = coolingX + pairOffset;
-		const coolingDisplayRadius = hasFlow ? pairRadius : coolingRadius;
-		const primaryFlow = this._laneFlowState(["meter_flow"]);
-		const chFlow = this._laneFlowState(["ch_valve"]);
-		const dhwFlow = this._laneFlowState(["dhw_flow", "dhw_valve"]);
-		const bypassActive = this._isBypassActive();
-		const bypassFlow = bypassActive ? {
-			duration: "3.4s",
-			stopped: false
-		} : {
-			duration: "0s",
-			stopped: true
-		};
-		const swapSides = this._config?.appearance?.swap_sides !== false;
-		const flowReversed = !swapSides;
-		const sides = (leftKey, leftLabel, rightKey, rightLabel) => swapSides ? {
-			leftKey: rightKey,
-			leftLabel: rightLabel,
-			rightKey: leftKey,
-			rightLabel: leftLabel
-		} : {
-			leftKey,
-			leftLabel,
-			rightKey,
-			rightLabel
-		};
-		const primarySides = sides("primary_return", this._t("primary_return"), "primary_supply", this._t("primary_supply"));
-		const chSides = sides("ch_return", this._t("ch_return"), "ch_supply", this._t("ch_supply"));
-		const dhwSides = sides("dhw_hot_out", this._t("dhw_hot_out"), "dhw_cold_in", this._t("dhw_cold_in"));
-		const primaryLane = this._lanePipe(gPrimary, 110, 510, laneY1, primarySides.leftKey, primarySides.rightKey, primaryFlow.duration, primaryFlow.stopped, flowReversed);
-		const chLane = this._lanePipe(gCh, 110, 510, laneY2, chSides.leftKey, chSides.rightKey, chFlow.duration, chFlow.stopped, flowReversed);
-		const dhwLane = this._lanePipe(gDhw, 110, 510, laneY3, dhwSides.leftKey, dhwSides.rightKey, dhwFlow.duration, dhwFlow.stopped, flowReversed);
-		const bypassLoop = this._bypassLoop(`${this._id}-bypass`, 190, 430, laneY3, bypassEdgeOffset, bypassDipDepth, "circulation_bypass_temp", "bvv_bypass_status", bypassFlow.duration, bypassFlow.stopped);
-		const laneBox = (key, label, x, y, align) => {
-			if (!this._entityId(key)) return "";
-			const textX = align === "left" ? x + 50 : x + 50;
-			return `
-            <g ${this._svgEntityAttrs(key)} tabindex="0">
-              <rect x="${x}" y="${y - 28}" width="100" height="56" rx="10" fill="transparent"></rect>
-              ${hasLabels ? `<text x="${textX}" y="${y - 8}" text-anchor="middle" class="label">${this._escapeHtml(label)}</text>` : ""}
-              ${hasTemps ? `<text x="${textX}" y="${y + 18}" text-anchor="middle" class="temperature">${this._formatTemp(key)}</text>` : ""}
-            </g>
-      `;
-		};
-		this.shadowRoot.innerHTML = `
-      <style>
-        :host {
-          display: block;
-          box-sizing: border-box;
-          --fv-flow-width: 40px;
-          --fv-background: var(--fv-card-background, var(--ha-card-background, var(--card-background-color, var(--paper-card-background-color, var(--primary-background-color, #1c1c1c)))));
-          --fv-text: var(--fv-card-text-color, var(--primary-text-color, var(--text-primary-color, currentColor)));
-          --fv-muted: var(--fv-card-secondary-text-color, var(--secondary-text-color, var(--fv-text)));
-          --fv-flow-detail: var(--fv-card-flow-detail-color, rgba(255, 255, 255, .96));
-        }
+const VERSION = "0.1.49";
 
-        ha-card {
-          display: block;
-          box-sizing: border-box;
-          width: 100%;
-          overflow: hidden;
-          position: relative;
-        }
+const FIELDS = [
+  ["primary_supply", "Fjernvarme fremløb"], ["primary_return", "Fjernvarme retur"], ["primary_valve", "Fjernvarme hovedventil"], ["summer_cutoff", "Sommerudkobling"],
+  ["primary_cooling", "Fjernvarme afkøling"], ["pressure", "Anlægstryk"],
+  ["meter_power", "Aktuel effekt"], ["meter_flow", "Aktuelt flow"],
+  ["meter_energy_total", "Energi total"], ["meter_volume_total", "Volumen total"],
+  ["ch_supply", "Radiator fremløb"], ["ch_return", "Radiator retur"],
+  ["ch_valve", "Radiatorventil"], ["ch_flow", "Radiatorflow"],
+  ["ch_power", "Radiatoreffekt"], ["ch_outdoor", "Udetemperatur"],
+  ["ch_pump", "Radiatorpumpe"], ["dhw_cold_in", "Koldtvand ind"],
+  ["dhw_hot_out", "Varmt brugsvand"], ["dhw_flow", "Brugsvandsflow"],
+  ["dhw_power", "Brugsvandseffekt"], ["dhw_valve", "Brugsvandsventil"],
+  ["dhw_setpoint", "Brugsvand setpunkt"], ["dhw_status", "Brugsvand status"],
+  ["circulation_temp", "Cirkulationstemperatur"], ["circulation_status", "Cirkulationsstatus"],
+  ["circulation_bypass_temp", "Bypass temperatur"], ["bvv_bypass_status", "Bypass status"],
+  ["standby", "Standby"], ["vacation", "Ferie"], ["sentio_active", "Varmekald aktiv"],
+  ["sentio_status", "Varmekald status"], ["sentio_call_active", "Varmekald i gang"],
+  ["sentio_fejl", "Varmekald fejl"], ["auto_standby_active", "Auto standby"],
+  ["auto_standby_status", "Auto standby status"], ["auto_standby_engaged", "Standby aktiveret"],
+  ["auto_standby_fejl", "Auto standby fejl"]
+];
 
-        .card {
-          box-sizing: border-box;
-          display: flex;
-          flex-direction: column;
-          padding: ${compact ? "4px 3px 6px" : "8px 5px 10px"};
-          color: var(--fv-text) !important;
-        }
+class HAFjernvarmeHouseCard extends HTMLElement {
+  static getStubConfig() {
+    return { title: "Fjernvarme", animation: true, entities: Object.fromEntries(FIELDS.map(([k]) => [k, ""])) };
+  }
+  static async getConfigElement() { return document.createElement("ha-fjernvarme-house-card-editor"); }
+  constructor() {
+    super(); this.attachShadow({ mode: "open" }); this._config = {}; this._hass = null; this._signature = "";
+    this._id = `fvh-${Math.random().toString(36).slice(2, 9)}`;
+  }
+  setConfig(config) {
+    if (!config) throw new Error("Ugyldig konfiguration");
+    this._config = { title: "Fjernvarme", animation: true, show_details: true, entities: {}, ...config, entities: { ...(config.entities || {}) } };
+    this._signature = ""; this._render();
+  }
+  set hass(hass) {
+    this._hass = hass;
+    const ids = [...Object.values(this._config.entities || {}).flat()].filter(v => typeof v === "string");
+    const sig = JSON.stringify(ids.map(id => [id, hass?.states?.[id]?.state, hass?.states?.[id]?.attributes?.unit_of_measurement]));
+    if (sig !== this._signature) { this._signature = sig; this._render(); }
+  }
+  getCardSize() { return this._config.show_details === false ? 10 : 15; }
+  getGridOptions() { return { rows: "auto", columns: 12, min_columns: 6 }; }
+  _entityId(key) {
+    const configured = this._config.entities?.[key];
+    if (configured) return configured;
+    if (key === "summer_cutoff") return Object.keys(this._hass?.states || {}).find(id => /wavin_calefa.*itc_max_outdoor_temp$/.test(id));
+    return undefined;
+  }
+  _entity(key) { const id = this._entityId(key); return id ? this._hass?.states?.[id] : undefined; }
+  _num(key) { const n = Number.parseFloat(String(this._entity(key)?.state ?? "").replace(",", ".")); return Number.isFinite(n) ? n : undefined; }
+  _on(key) { return ["on","true","active","open","opening","running","heat","heating","ja","til","aktiv","kører"].includes(String(this._entity(key)?.state || "").toLowerCase()); }
+  _flowing(key) { const n=this._num(key); return Number.isFinite(n) ? n > 0.01 : this._on(key); }
+  _fmt(key, digits = 1, fallbackUnit = "") {
+    const e = this._entity(key); if (!e || ["unknown","unavailable",""].includes(e.state)) return "—";
+    const n = this._num(key); if (!Number.isFinite(n)) return this._esc(e.state);
+    const lang = this._hass?.locale?.language || this._hass?.language || "da";
+    const unit = e.attributes?.unit_of_measurement || fallbackUnit;
+    return `${n.toLocaleString(lang,{maximumFractionDigits:digits})}${unit ? ` ${unit}` : ""}`;
+  }
+  _esc(v) { return String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]); }
+  _temp(key) { const n=this._num(key); return Number.isFinite(n) ? `${this._fmt(key,1,"°C")}` : "—"; }
+  _tempColor(value) {
+    if (!Number.isFinite(value)) return "#8295a5";
+    const stops=[[5,[79,145,220]],[15,[92,190,215]],[25,[119,205,190]],[35,[225,188,111]],[50,[238,124,79]],[70,[235,78,70]]];
+    if(value<=stops[0][0]) return `rgb(${stops[0][1]})`;
+    for(let i=1;i<stops.length;i++){ if(value<=stops[i][0]){const [a,ca]=stops[i-1],[b,cb]=stops[i],t=(value-a)/(b-a);return `rgb(${ca.map((x,j)=>Math.round(x+(cb[j]-x)*t)).join(",")})`;}}
+    return `rgb(${stops.at(-1)[1]})`;
+  }
+  _returnColor(supply, ret) {
+    const cooling = Number.isFinite(supply) && Number.isFinite(ret) ? Math.max(0,supply-ret) : this._num("primary_cooling");
+    const t = Math.sqrt(Math.max(0,Math.min(1,(cooling || 0)/24)));
+    return `hsl(${Math.round(12+198*t)} ${Math.round(82-18*t)}% ${Math.round(59+3*t)}%)`;
+  }
+  _coolingStatusColor(value) {
+    if (!Number.isFinite(value)) return "var(--secondary-text-color)";
+    return value >= 20 ? "var(--success-color, #62cf8e)" : "var(--error-color, #ef6666)";
+  }
+  _pipe(cls, path, active=true, count=8) {
+    const duration = 6.1 + count * .08;
+    return `<g class="pipe ${cls} ${active ? "active" : ""}"><path class="pipe-rim" d="${path}"/><path class="pipe-core" d="${path}"/><path class="pipe-heat" d="${path}"/><path class="water-sheen" d="${path}"/>${Array.from({length:count},(_,i)=>`<g class="water-pulse"><ellipse cx="0" cy="0" rx="4.5" ry="1.8"/><circle cx="-8" cy="0" r=".8"/><animateMotion dur="${duration}s" begin="-${(i*duration/count).toFixed(2)}s" repeatCount="indefinite" rotate="auto" path="${path}"/></g>`).join("")}</g>`;
+  }
+  _metric(label,key,digits=1,cls="") { return `<div class="metric entity-hit ${cls}" data-key="${key}" tabindex="0"><small>${label}</small><strong>${this._fmt(key,digits)}</strong></div>`; }
+  _status(label,key) { const e=this._entity(key), bad=/fejl|alarm|kritisk/i.test(key)&&this._on(key); return `<div class="metric entity-hit ${bad?"bad":""}" data-key="${key}" tabindex="0"><small>${label}</small><strong>${e?this._esc(e.state):"—"}</strong></div>`; }
+  _binaryStatus(label,key,onText,offText) { const e=this._entity(key); return `<div class="metric entity-hit" data-key="${key}" tabindex="0"><small>${label}</small><strong>${e?(this._on(key)?onText:offText):"—"}</strong></div>`; }
+  _bindMoreInfo() {
+    const open = key => {
+      const entityId = this._entityId(key);
+      if (!entityId || Array.isArray(entityId)) return;
+      this.dispatchEvent(new CustomEvent("hass-more-info",{detail:{entityId},bubbles:true,composed:true}));
+    };
+    this.shadowRoot.querySelectorAll("[data-key]").forEach(element => {
+      element.addEventListener("click",event=>{event.stopPropagation();open(element.dataset.key);});
+      element.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();open(element.dataset.key);}});
+    });
+  }
+  _render() {
+    if (!this.shadowRoot) return;
+    const ps=this._num("primary_supply"), pr=this._num("primary_return"), cs=this._num("ch_supply"), cr=this._num("ch_return"), hot=this._num("dhw_hot_out"), cold=this._num("dhw_cold_in");
+    const primaryReturn=this._returnColor(ps,pr), radiatorReturn=this._returnColor(cs,cr);
+    const primaryActive=this._flowing("meter_flow");
+    const chActive=this._flowing("ch_flow");
+    const dhwActive=this._flowing("dhw_flow");
+    const bypass=this._on("bvv_bypass_status") || /aktiv|open|on/i.test(String(this._entity("bvv_bypass_status")?.state||""));
+    const alarmIds=Array.isArray(this._config.entities?.alarms)?this._config.entities.alarms:[];
+    const alarms=alarmIds.filter(id=>["on","true","active","problem"].includes(String(this._hass?.states?.[id]?.state||"").toLowerCase())).length;
+    const operating = this._on("standby") ? "Standby" : this._on("vacation") ? "Ferie" : chActive && dhwActive ? "Radiator + varmt vand" : dhwActive ? "Varmt vand" : chActive ? "Radiatorvarme" : "Klar";
+    const details = this._config.show_details === false ? "" : `<div class="details">
+      <section><h3>Fjernvarme</h3><div class="metric-grid">${this._metric("Fremløb","primary_supply")}${this._metric("Retur","primary_return")}${this._metric("Afkøling","primary_cooling")}${this._metric("Flow","meter_flow",2)}${this._metric("Effekt","meter_power",1)}${this._metric("Anlægstryk","pressure",1)}</div></section>
+      <section><h3>Radiator</h3><div class="metric-grid">${this._metric("Fremløb","ch_supply")}${this._metric("Retur","ch_return")}${this._metric("Ventil","ch_valve",0)}${this._metric("Flow","ch_flow",1)}${this._metric("Effekt","ch_power",1)}${this._metric("Udetemperatur","ch_outdoor",1)}</div></section>
+      <section><h3>Varmt vand</h3><div class="metric-grid">${this._metric("Koldt ind","dhw_cold_in")}${this._metric("Varmt ud","dhw_hot_out")}${this._metric("Flow","dhw_flow",2)}${this._metric("Ventil","dhw_valve",0)}${this._metric("Effekt","dhw_power",1)}${this._status("Bypass","bvv_bypass_status")}</div></section>
+      <section><h3>Drift</h3><div class="metric-grid">${this._binaryStatus("Varmekald","sentio_call_active","Kald","Intet kald")}${this._binaryStatus("Auto standby","auto_standby_engaged","Aktiv","Fra")}${this._binaryStatus("Standby","standby","Til","Fra")}${this._binaryStatus("Ferie","vacation","Til","Fra")}</div></section>
+    </div>`;
+    this.shadowRoot.innerHTML=`<style>${this._styles(ps,primaryReturn,cs,radiatorReturn,hot,cold)}</style><style>${this._responsiveStyles()}</style><ha-card class="${alarms?"alarm":""}">
+      <header><div><small>VARMECENTRAL</small><h2>${this._esc(this._config.title)}</h2></div><div class="chips"><span class="alarm-chip">${alarms?`${alarms} alarm${alarms>1?"er":""}`:"Ingen alarmer"}</span><span>${operating}</span></div></header>
+      <div class="hero"><div class="diagram"><svg viewBox="0 0 760 520" role="img" aria-label="Fjernvarmeunit med radiator, varmt vand og bypass">
+        <defs>
+          <linearGradient id="${this._id}-primary" x1="0" x2="1"><stop stop-color="#ef534f"/><stop offset=".55" stop-color="${this._tempColor(ps)}"/><stop offset="1" stop-color="${primaryReturn}"/></linearGradient>
+          <linearGradient id="${this._id}-ch" x1="0" x2="1"><stop stop-color="${this._tempColor(cs)}"/><stop offset="1" stop-color="${radiatorReturn}"/></linearGradient>
+          <linearGradient id="${this._id}-dhw" x1="0" x2="1"><stop stop-color="${this._tempColor(hot)}"/><stop offset="1" stop-color="#f2a063"/></linearGradient><linearGradient id="${this._id}-radiator-cooling" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ef514d"/><stop offset=".30" stop-color="#eb965f"/><stop offset=".68" stop-color="#55bebd"/><stop offset="1" stop-color="#4f94dc"/></linearGradient>
+        </defs>
+        <path class="house" d="M150 68 L430 8 750 68 V506 H150 Z"/><text class="zone" x="75" y="48" text-anchor="middle">FJERNVARMENET</text><text class="zone" x="430" y="34" text-anchor="middle">INDE I HUSET</text>
+        ${this._pipe("primary-supply","M24 132 H200",primaryActive,7)}${this._pipe("primary-return","M200 360 H24",primaryActive,7)}
+        ${this._pipe("dhw-hot","M380 350 H620 Q640 350 640 330",dhwActive,7)}${this._pipe("dhw-cold","M500 495 V430 H380",dhwActive,7)}
+        <g class="unit"><rect x="200" y="80" width="180" height="400" rx="20"/><text class="unit-title" x="290" y="102" text-anchor="middle">WAVIN CALEFA</text>
+          <g class="exchanger"><rect x="216" y="110" width="148" height="150" rx="12"/><text class="ex-title" x="290" y="130" text-anchor="middle">RADIATOR</text><g class="exchanger-metrics" text-anchor="middle"><text class="k" x="290" y="151">VENTIL</text><text class="v entity-hit" data-key="ch_valve" tabindex="0" x="290" y="167">${this._fmt("ch_valve",0)}</text><text class="k" x="290" y="188">FLOW</text><text class="v entity-hit" data-key="ch_flow" tabindex="0" x="290" y="204">${this._fmt("ch_flow",1)}</text><text class="k" x="290" y="225">EFFEKT</text><text class="v entity-hit" data-key="ch_power" tabindex="0" x="290" y="241">${this._fmt("ch_power",1)}</text></g></g>
+          <g class="exchanger dhw-exchanger"><rect x="216" y="272" width="148" height="197" rx="12"/><text class="ex-title" x="290" y="292" text-anchor="middle">VARMT VAND</text><g class="exchanger-metrics" text-anchor="middle"><text class="k" x="290" y="313">VENTIL</text><text class="v entity-hit" data-key="dhw_valve" tabindex="0" x="290" y="329">${this._fmt("dhw_valve",0)}</text><text class="k" x="290" y="350">FLOW</text><text class="v entity-hit" data-key="dhw_flow" tabindex="0" x="290" y="366">${this._fmt("dhw_flow",1)}</text><text class="k" x="290" y="387">EFFEKT</text><text class="v entity-hit" data-key="dhw_power" tabindex="0" x="290" y="403">${this._fmt("dhw_power",1)}</text></g></g>
+          <g class="dhw-bypass ${bypass ? "active" : ""} entity-hit" data-key="bvv_bypass_status" tabindex="0"><rect class="bypass-hit" x="223" y="421" width="134" height="44" rx="8"/><text class="bypass-status" x="290" y="430" text-anchor="middle">BYPASS ${bypass ? "AKTIV" : "LUKKET"}</text><g class="bypass-values" text-anchor="middle"><text class="k" x="258" y="440">FLOW</text><text class="v entity-hit" data-key="dhw_flow" tabindex="0" x="258" y="450">${this._fmt("dhw_flow",1)}</text><text class="k" x="322" y="440">TEMP</text><text class="v entity-hit" data-key="circulation_bypass_temp" tabindex="0" x="322" y="450">${this._temp("circulation_bypass_temp")}</text></g><path class="bypass-track" d="M230 459 H350"/><path class="bypass-flow" pathLength="100" d="M230 459 H350"/></g>
+          <circle cx="200" cy="132" r="5"/><circle cx="200" cy="360" r="5"/><circle cx="380" cy="119" r="5"/><circle cx="380" cy="220" r="5"/><circle cx="380" cy="350" r="5"/><circle cx="380" cy="430" r="5"/>
+        </g>
+        <g class="radiator" transform="translate(587 102)"><rect width="146" height="135" rx="12"/></g>${this._pipe("ch-circuit","M380 119 H612 V205 H628 V119 H644 V205 H660 V119 H676 V205 H692 V119 H708 V220 H380",chActive,8)}
+        <g class="label inside-temp entity-hit" data-key="ch_supply" tabindex="0" transform="translate(500 68)" text-anchor="middle"><text>Radiator fremløb</text><text class="label-value" style="font-size:29.25px" y="29">${this._temp("ch_supply")}</text></g><g class="label inside-temp entity-hit" data-key="ch_return" tabindex="0" transform="translate(500 169)" text-anchor="middle"><text>Radiator retur</text><text class="label-value" style="font-size:29.25px" y="29">${this._temp("ch_return")}</text></g><g class="label inside-temp entity-hit" data-key="dhw_hot_out" tabindex="0" transform="translate(500 299)" text-anchor="middle"><text>Varmt brugsvand</text><text class="label-value" style="font-size:29.25px" y="29">${this._temp("dhw_hot_out")}</text></g><g class="label inside-temp entity-hit" data-key="dhw_cold_in" tabindex="0" transform="translate(520 447)" text-anchor="start"><text>Koldtvand ind</text><text class="label-value" style="font-size:29.25px" y="29">${this._temp("dhw_cold_in")}</text></g><g class="tap ${dhwActive ? "active" : ""}" transform="translate(610 270)"><path class="tap-body" d="M30 60 V31 Q30 16 45 16 H78 Q90 16 90 28 V35"/><path class="tap-handle" d="M20 31 H40 M30 21 V41"/><path class="tap-outlet" d="M90 35 V47"/><path class="basin" d="M7 68 H108 L98 88 Q58 99 17 88 Z"/><path class="drop" d="M90 54 C81 66 85 75 90 75 C96 75 100 66 90 54Z"/><text x="58" y="111" text-anchor="middle">VARMT VAND</text></g>
+        <g class="label primary in entity-hit" data-key="primary_supply" tabindex="0" transform="translate(75 68)" text-anchor="middle"><text>Fjernvarme fremløb</text><text class="label-value" style="font-size:31.5px" y="30">${this._temp("primary_supply")}</text></g><g class="delta entity-hit" data-key="primary_cooling" tabindex="0" transform="translate(75 205)"><text text-anchor="middle">AFKØLING</text><text class="label-value" style="font-size:20px" text-anchor="middle" y="26">${this._fmt("primary_cooling",1)}</text></g><g class="flow-metric entity-hit" data-key="meter_flow" tabindex="0" transform="translate(75 270)"><text text-anchor="middle">FLOW</text><text class="label-value" style="font-size:20px" text-anchor="middle" y="26">${this._fmt("meter_flow",1)}</text></g><g class="label primary out entity-hit" data-key="primary_return" tabindex="0" transform="translate(75 400)" text-anchor="middle"><text>Retur</text><text class="label-value" style="font-size:31.5px" y="31">${this._temp("primary_return")}</text></g><g class="outdoor-value entity-hit" data-key="ch_outdoor" tabindex="0" transform="translate(430 -42)" text-anchor="middle"><text>UDETEMPERATUR</text><text class="value" style="font-size:22.5px" y="24">${this._temp("ch_outdoor")}</text></g>
+        
+        
 
-        svg {
-          width: 100%;
-          height: auto;
-          aspect-ratio: 620 / ${this._diagramHeight()};
-          display: block;
-          overflow: visible;
-          color: var(--fv-text) !important;
-        }
+      </svg></div><aside>${this._metric("Effekt","meter_power",1)}${this._metric("Tryk","pressure",1)}${this._metric("Radiatorventil","ch_valve",0)}${this._metric("BV-ventil","dhw_valve",0)}</aside></div>${details}
+    </ha-card>`;
+    this._bindMoreInfo();
+  }
+  _styles(ps,pr,cs,cr,hot,cold) { return `
+    :host{display:block}ha-card{box-sizing:border-box;padding:16px;overflow:hidden;background:linear-gradient(145deg,color-mix(in srgb,var(--card-background-color) 96%,#132333),var(--card-background-color));color:var(--primary-text-color);border:1px solid color-mix(in srgb,var(--divider-color) 65%,transparent);border-radius:28px}header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:3px 7px 9px}header small{font-size:10px;letter-spacing:.18em;color:var(--secondary-text-color)}h2{font-size:25px;margin:3px 0 0}.chips{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.chips span{font-size:10px;padding:7px 10px;border:1px solid color-mix(in srgb,var(--success-color,#62cfad) 32%,transparent);border-radius:18px;color:var(--success-color,#7bd9ba);background:#55cba908}.alarm .alarm-chip{color:#f18787;border-color:#e7666655;background:#e7666610}.hero{display:grid;grid-template-columns:minmax(0,1fr) 92px;gap:10px}.diagram{min-width:0;aspect-ratio:760/520}.diagram svg{width:100%;height:100%;overflow:visible}.house{fill:#f2994a14;stroke:#78a4b940;stroke-width:1.5}.zone{font-size:10px;letter-spacing:1.6px;font-weight:700;fill:var(--secondary-text-color)}.pipe-rim,.pipe-core,.pipe-heat,.water-sheen{fill:none;stroke-linecap:round;stroke-linejoin:round}.pipe-rim{stroke:#8597a5;stroke-width:18;opacity:.75}.pipe-core{stroke:#1b2b35;stroke-width:14}.pipe-heat{stroke-width:9;opacity:.65}.water-sheen{display:none;stroke:rgba(222,247,255,.38);stroke-width:1.4;stroke-dasharray:3 16;filter:drop-shadow(0 0 1.5px rgba(190,236,255,.34))}.pipe.active .water-sheen{display:inline;animation:water-shimmer 3.2s linear infinite}.primary-supply .pipe-heat{stroke:#ed554f}.primary-return .pipe-heat{stroke:${pr}}.ch-circuit .pipe-heat{stroke:url(#${this._id}-radiator-cooling)}.ch-circuit .water-sheen{stroke-width:1.2;opacity:.38;animation-duration:4.4s!important}.ch-circuit .water-pulse{fill:rgba(231,249,255,.60);opacity:.46;transform:scale(.62)}.dhw-hot .pipe-heat{stroke:url(#${this._id}-dhw)}.dhw-cold .pipe-heat{stroke:${this._tempColor(cold)}}.water-pulse{display:none;fill:rgba(230,249,255,.66);filter:drop-shadow(0 0 2px rgba(195,239,255,.30));opacity:.62}.water-pulse circle{fill:rgba(255,255,255,.36)}.pipe.active .water-pulse{display:inline}.pipe:not(.active){opacity:.42}.pipe:not(.active) .water-sheen{display:none;animation:none}.unit rect{fill:#162631;stroke:#83a9ba;stroke-width:1.7}.unit text{font-size:8px;font-weight:700;letter-spacing:1px;fill:#a9bcc7}.unit .unit-title{font-size:9px}.exchanger .ex-title{font-size:9px}.exchanger-metrics .k{font-size:6.5px;fill:var(--secondary-text-color);font-weight:600}.exchanger-metrics .v{font-size:12px;fill:var(--primary-text-color);font-weight:700;letter-spacing:0}.exchanger-metrics .v.small{font-size:8px}.primary-row text{font-size:7px;fill:var(--secondary-text-color);letter-spacing:.05em}.primary-row .value{font-size:14px;font-weight:700;fill:var(--primary-text-color);letter-spacing:0}.primary-row .primary-flow{font-size:8px;fill:var(--secondary-text-color)}.outdoor-value text,.outdoor-value .value{font-size:8px;letter-spacing:.08em;fill:var(--secondary-text-color)}.outdoor-value .value{font-weight:700;letter-spacing:0;fill:var(--primary-text-color)}.unit circle{fill:#dce8ed;stroke:#13202a}.exchanger rect{fill:#1c2d38;stroke:#7598aa;stroke-width:1;opacity:.85}.exchanger path{fill:none;stroke:#7598aa;stroke-width:3.5;opacity:.85}.radiator>rect{fill:#1a2a35;stroke:#94aeba;stroke-width:1.5}.radiator .fin{fill:#253b47;stroke:#688492;stroke-width:.7}.radiator text,.tap text{font-size:8px;letter-spacing:1px;fill:var(--secondary-text-color)}.unit-valve circle{fill:#192a35;stroke:#d7a06f;stroke-width:1.2}.unit-valve path{fill:none;stroke:#e5b17d;stroke-width:1.3}.unit-valve text{font-size:6.5px;letter-spacing:.04em;fill:#e9c39d}.primary-unit-valve text{fill:#b9cbd4}.tap .tap-body,.tap .tap-outlet{fill:none;stroke:#9bb0ba;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}.tap .tap-handle{fill:none;stroke:#b9cbd3;stroke-width:3;stroke-linecap:round}.tap .basin{fill:#172832;stroke:#7894a2;stroke-width:2;stroke-linejoin:round}.tap .drop{fill:${this._tempColor(hot)};stroke:none;opacity:0}.tap.active .drop{animation:drop 2s ease-in infinite}.label text,.bypass-label text,.bypass-icon text,.circuit-meta text,.delta text,.flow-metric text{font-size:9px;fill:var(--secondary-text-color)}.bypass-icon circle{fill:#1b2c37;stroke:#7898a8;stroke-width:1.5}.bypass-icon path{fill:none;stroke:#7898a8;stroke-width:2;stroke-linecap:round}.bypass-icon text{fill:var(--secondary-text-color);font-size:8px}.bypass-icon .label-value{fill:var(--primary-text-color);font-size:12px;font-weight:650}.bypass-icon.active circle{stroke:#e99a6f;filter:drop-shadow(0 0 5px #e87e5855)}.bypass-icon.active path{stroke:#e99a6f;transform-origin:center;animation:bypass-turn 2.4s linear infinite}.circuit-meta text{fill:var(--secondary-text-color);font-size:8px}.circuit-meta .label-value{fill:var(--primary-text-color);font-size:12px;font-weight:650}.label .pipe-meta{font-size:9px;fill:#b7c4cc}.label .label-value,.bypass-label .label-value,.delta .label-value,.flow-metric .label-value{font-size:15px;font-weight:650;fill:var(--primary-text-color)}.label.primary .label-value{font-size:21px}.delta .label-value{font-size:19px;fill:${this._coolingStatusColor(this._num("primary_cooling"))}}aside{display:grid;grid-template-rows:repeat(4,1fr);border-left:1px solid #ffffff14;padding-left:8px}.metric{min-width:0;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:7px 4px}.metric small,.metric strong{display:block;overflow:hidden;text-overflow:ellipsis}.metric small{font-size:8px;color:var(--secondary-text-color);white-space:normal}.metric strong{font-size:13px;font-weight:600;margin-top:3px;white-space:nowrap}.details{display:grid;grid-template-columns:1.05fr 1fr 1.25fr 1.2fr;gap:8px;padding-top:11px;margin-top:5px;border-top:1px solid #ffffff12}.details section{min-width:0;padding:9px;border:1px solid #ffffff0e;border-radius:13px;background:#ffffff04}.details h3{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--secondary-text-color);margin:0 0 6px}.metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px}.metric-grid .metric{border-radius:8px;background:#ffffff04;min-height:37px}.metric.bad strong{color:#ef7777}@keyframes bypass-turn{to{transform:rotate(360deg)}}@keyframes water-shimmer{to{stroke-dashoffset:-38}}@keyframes drop{0%,35%{transform:translateY(-3px);opacity:0}60%{opacity:1}100%{transform:translateY(10px);opacity:0}}${this._config.animation===false?".water-pulse{display:none!important}.water-sheen,.drop,.bypass-icon.active path,.bypass-icon.active .bypass-pulse,.dhw-bypass.active .bypass-flow{animation:none!important}":""}@media(prefers-reduced-motion:reduce){.water-pulse{display:none!important}.water-sheen,.drop,.bypass-icon.active path,.bypass-icon.active .bypass-pulse,.dhw-bypass.active .bypass-flow{animation:none!important}}@media(max-width:700px){ha-card{padding:11px;border-radius:22px}.hero{grid-template-columns:minmax(0,1fr) 72px}.details{grid-template-columns:repeat(2,minmax(0,1fr))}h2{font-size:21px}.chips .alarm-chip{display:none}}@media(max-width:480px){.hero{grid-template-columns:1fr}.diagram{aspect-ratio:760/540}aside{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:auto;border-left:0;border-top:1px solid #ffffff14;padding:5px 0 0}.details{grid-template-columns:1fr}.chips span{font-size:8px;padding:5px 7px}.label.primary .label-value{font-size:18px}}
+  `; }
+  _responsiveStyles() { return `
+    :host {
+      container-type: inline-size;
+      --fv-bg: var(--primary-background-color, #1c1c1c);
+      --fv-fg: var(--primary-text-color);
+      --fv-muted: var(--secondary-text-color);
+      --fv-component: color-mix(in srgb, var(--fv-bg) 91%, var(--fv-fg) 9%);
+      --fv-component-strong: color-mix(in srgb, var(--fv-bg) 68%, var(--fv-fg) 32%);
+      --fv-line: color-mix(in srgb, var(--fv-fg) 18%, transparent);
+    }
+    ha-card {
+      background: var(--ha-card-background, var(--card-background-color, var(--fv-bg)));
+      color: var(--fv-fg);
+      border-color: var(--fv-line);
+    }
+    .label > text:first-child, .outdoor-value > text:first-child { font-size: 10.5px; }
+    .inside-temp > text:first-child { font-size: 12.5px; }
+    aside .metric { padding-inline: 1px; }
+    aside .metric small {
+      font-size: 11px;
+      line-height: 1.15;
+      text-wrap: balance;
+    }
+    aside .metric strong {
+      font-size: 18px;
+      line-height: 1.05;
+      letter-spacing: -.02em;
+    }
+    .label .label-value, .outdoor-value .value {
+      fill: color-mix(in srgb, var(--fv-fg) 78%, var(--fv-bg));
+    }
+    .label .label-value { font-size: 26px !important; }
+    .label.primary .label-value { font-size: 28px !important; }
+    .outdoor-value .value { font-size: 20px !important; }
+    .house { fill: #f2994a14; stroke: var(--fv-line); }
+    .pipe-rim { stroke: color-mix(in srgb, var(--fv-fg) 42%, var(--fv-bg)); }
+    .pipe-core { stroke: color-mix(in srgb, var(--fv-bg) 54%, var(--fv-fg) 46%); }
+    .dhw-cold .pipe-heat { stroke: #3e9ed3; }
+    .unit rect, .exchanger rect, .radiator > rect, .radiator .fin,
+    .unit-valve circle, .bypass-icon circle, .tap .basin {
+      fill: var(--fv-component);
+      stroke: color-mix(in srgb, var(--fv-fg) 38%, transparent);
+    }
+    .exchanger path, .tap .tap-body, .tap .tap-outlet, .tap .tap-handle,
+    .bypass-icon path { stroke: color-mix(in srgb, var(--fv-fg) 48%, transparent); }
+    .bypass-icon .bypass-pulse { fill: none; stroke: transparent; opacity: 0; transform-origin: center; }
+    .bypass-icon.active .bypass-pulse { stroke: #e99a6f; animation: bypass-pulse 1.8s ease-out infinite; }
+    @keyframes bypass-pulse { 0% { opacity: .7; transform: scale(.72); } 75%,100% { opacity: 0; transform: scale(1.3); } }
+    .dhw-bypass .bypass-hit { fill: color-mix(in srgb, var(--fv-fg) 3%, transparent); stroke: color-mix(in srgb, var(--fv-fg) 10%, transparent); stroke-width: .7; }
+    .dhw-bypass .bypass-status { fill: var(--fv-muted); font-size: 7.5px; font-weight: 750; letter-spacing: .075em; }
+    .dhw-bypass.active .bypass-hit { fill: color-mix(in srgb, #e99a6f 11%, transparent); stroke: color-mix(in srgb, #e99a6f 55%, transparent); }
+    .dhw-bypass.active .bypass-status { fill: #f0a277; }
+    .dhw-bypass .bypass-values .k { fill: var(--fv-muted); font-size: 6.5px; font-weight: 650; letter-spacing: .04em; }
+    .dhw-bypass .bypass-values .v { fill: var(--fv-fg); font-size: 10px; font-weight: 750; }
+    .dhw-bypass .bypass-track, .dhw-bypass .bypass-flow { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .dhw-bypass .bypass-track { stroke: color-mix(in srgb, var(--fv-fg) 44%, transparent); stroke-width: 6; }
+    .dhw-bypass .bypass-flow { stroke: #fff0df; stroke-width: 4; stroke-dasharray: 8 9; opacity: 0; filter: drop-shadow(0 0 3px #e99a6f); }
+    .dhw-bypass.active .bypass-track { stroke: #e99a6f; filter: drop-shadow(0 0 5px #e87e5877); }
+    .dhw-bypass.active .bypass-flow { opacity: 1; animation: dhw-bypass-flow 1.15s linear infinite; }
+    @keyframes dhw-bypass-flow { to { stroke-dashoffset: -34; } }
+    .unit circle { fill: color-mix(in srgb, var(--fv-bg) 35%, var(--fv-fg) 65%); stroke: var(--fv-bg); }
+    .unit text, .unit-valve text, .label .pipe-meta { fill: var(--fv-muted); }
+    aside, .details { border-color: var(--fv-line); }
+    .details section, .metric-grid .metric {
+      border-color: var(--fv-line);
+      background: color-mix(in srgb, var(--fv-fg) 4%, transparent);
+    }
+    .entity-hit { cursor: pointer; }
+    .entity-hit:focus-visible { outline: 2px solid var(--info-color, #4aa3ff); outline-offset: 2px; }
+    .ch-circuit.active .pipe-heat {
+      opacity: .92;
+      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--warning-color, #f2994a) 58%, transparent));
+    }
+    .ch-circuit.active .water-sheen {
+      stroke-width: 2.3;
+      opacity: .88;
+      stroke-dasharray: 5 12;
+      filter: drop-shadow(0 0 3px rgba(225, 248, 255, .72));
+      animation-duration: 2.5s !important;
+    }
+    .ch-circuit.active .water-pulse {
+      opacity: .9;
+      transform: scale(.92);
+      filter: drop-shadow(0 0 4px rgba(221, 247, 255, .78));
+    }
+    @container (max-width: 700px) {
+      ha-card { padding: 12px 9px; border-radius: 22px; }
+      header { padding: 1px 4px 8px; }
+      header small { font-size: 11px; }
+      h2 { font-size: 30px; }
+      .chips { max-width: 52%; }
+      .chips .alarm-chip { display: inline-flex; }
+      .chips span { font-size: 11px; padding: 7px 9px; }
+      .hero { grid-template-columns: 1fr; gap: 8px; }
+      .diagram { width: 100%; aspect-ratio: 760 / 520; }
+      aside {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-rows: auto;
+        border-left: 0;
+        border-top: 1px solid var(--fv-line);
+        padding: 8px 0 0;
+      }
+      aside .metric { min-width: 0; padding: 6px 2px; }
+      aside .metric small { font-size: 11px; line-height: 1.15; }
+      aside .metric strong { font-size: 18px; }
+      .zone { font-size: 13px; }
+      .unit text { font-size: 11px; }
+      .unit .unit-title, .exchanger .ex-title { font-size: 12px; }
+      .exchanger-metrics .k { font-size: 9.5px; }
+      .exchanger-metrics .v { font-size: 17px; }
+      .label text, .circuit-meta text, .delta text, .flow-metric text { font-size: 14px; }
+      .label > text:first-child, .outdoor-value > text:first-child { font-size: 14px; }
+      .label .label-value { font-size: 32px !important; }
+      .label.primary .label-value { font-size: 33px !important; }
+      .circuit-meta .label-value { font-size: 36px !important; }
+      .delta .label-value, .flow-metric .label-value { font-size: 22px !important; }
+      .outdoor-value text { font-size: 13px; }
+      .outdoor-value .value { font-size: 25px !important; }
+      .label .pipe-meta { font-size: 12px; }
+      .tap text { font-size: 10px; }
+      .details { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+      .details section { padding: 8px 6px; }
+      .metric-grid .metric { min-height: 42px; }
+      .metric-grid .metric small { font-size: 10px; }
+      .metric-grid .metric strong { font-size: 17px; }
+    }
+  `; }
+}
 
-        svg text {
-          fill: var(--fv-text) !important;
-          color: var(--fv-text) !important;
-        }
+class HAFjernvarmeHouseCardEditor extends HTMLElement {
+  setConfig(config){this._config=config||{};this._render();}
+  set hass(hass){this._hass=hass;if(this._form)this._form.hass=hass;}
+  _render(){
+    if(!this._config)return;
+    this.innerHTML=`<style>:host{display:block;padding:12px}.hint{color:var(--secondary-text-color);font-size:12px;margin:0 0 12px}</style><p class="hint">Alle felter kan ændres. Tomme felter vises som — på kortet.</p><ha-form></ha-form>`;
+    this._form=this.querySelector("ha-form"); this._form.hass=this._hass; this._form.data=this._config;
+    this._form.schema=[{name:"title",selector:{text:{}}},{name:"animation",selector:{boolean:{}}},{name:"show_details",selector:{boolean:{}}},{type:"expandable",name:"entities",title:"Entiteter",schema:FIELDS.map(([name,label])=>({name,label,selector:{entity:{}}}))}];
+    this._form.computeLabel=s=>s.label||s.name;
+    this._form.addEventListener("value-changed",e=>{this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:e.detail.value},bubbles:true,composed:true}));});
+  }
+}
 
-        .duct-bg {
-          fill: none;
-          stroke: color-mix(in srgb, var(--fv-text) 22%, transparent);
-          stroke-width: calc(var(--fv-flow-width) + 14px);
-          stroke-linecap: butt;
-          stroke-linejoin: round;
-        }
-
-        .flow {
-          fill: none;
-          stroke-width: var(--fv-flow-width);
-          stroke-linecap: butt;
-          stroke-linejoin: round;
-          opacity: .7;
-        }
-
-        .flow-glow {
-          fill: none;
-          stroke-width: calc(var(--fv-flow-width) + 6px);
-          stroke-linecap: butt;
-          stroke-linejoin: round;
-          opacity: .12;
-        }
-
-        .flow.stopped,
-        .flow-glow.stopped {
-          stroke: color-mix(in srgb, var(--fv-text) 26%, transparent) !important;
-          transition: stroke .5s ease;
-        }
-
-        .flow.stopped {
-          opacity: .55;
-        }
-
-        .flow-glow.stopped {
-          opacity: 0;
-        }
-
-        .fv-air-band {
-          transform-box: fill-box;
-          transform-origin: center;
-        }
-
-        .fv-air-line {
-          fill: none;
-          stroke: var(--fv-flow-detail);
-          stroke-linecap: round;
-          opacity: var(--air-alpha, .72);
-          animation: fv-airflow var(--flow-duration, 3.4s) linear infinite;
-          animation-delay: var(--air-flow-delay, 0s);
-        }
-
-        .fv-air-line.reverse {
-          animation-direction: reverse;
-        }
-
-        .no-animation .fv-air-line {
-          animation: none;
-        }
-
-        .fv-air-line.stopped {
-          animation: none;
-          opacity: .16;
-        }
-
-        .bypass-duct-bg {
-          fill: none;
-          stroke: color-mix(in srgb, var(--fv-text) 20%, transparent);
-          stroke-width: 18px;
-          stroke-linecap: round;
-        }
-
-        .bypass-flow {
-          fill: none;
-          stroke-width: 10px;
-          stroke-linecap: round;
-          stroke-dasharray: 9 13;
-          opacity: .95;
-          animation: fv-airflow var(--bypass-duration, 3.4s) linear infinite;
-          transition: stroke .5s ease, opacity .5s ease;
-        }
-
-        .no-animation .bypass-flow {
-          animation: none;
-        }
-
-        @keyframes fv-airflow {
-          from { stroke-dashoffset: 0; }
-          to { stroke-dashoffset: -260; }
-        }
-
-        .label {
-          font-size: 13px;
-          fill: var(--fv-muted) !important;
-          color: var(--fv-muted) !important;
-        }
-
-        .temperature {
-          font-size: 20px;
-          font-weight: 600;
-          fill: var(--fv-text) !important;
-          color: var(--fv-text) !important;
-        }
-
-        .status-circle {
-          fill: color-mix(in srgb, var(--fv-background) 88%, var(--fv-text) 4%);
-          stroke: none;
-          filter: drop-shadow(0 3px 7px rgba(0, 0, 0, .3));
-        }
-
-        .status-circle-rim {
-          fill: none;
-          stroke: color-mix(in srgb, var(--fv-text) 24%, transparent);
-          stroke-width: 1.5;
-        }
-
-        .status-circle-rim-large {
-          stroke-width: 2;
-        }
-
-        .status-circle-gloss {
-          fill: white;
-          opacity: .1;
-          mix-blend-mode: overlay;
-          pointer-events: none;
-        }
-
-        .status-label {
-          font-size: 11px;
-          letter-spacing: .3px;
-          text-transform: uppercase;
-          fill: var(--fv-muted) !important;
-          color: var(--fv-muted) !important;
-          paint-order: stroke;
-          stroke: color-mix(in srgb, var(--fv-background) 65%, transparent);
-          stroke-width: 2.5px;
-        }
-
-        .status-value {
-          font-size: 14px;
-          font-weight: 700;
-          fill: var(--fv-text) !important;
-          color: var(--fv-text) !important;
-        }
-
-        .status-ring-bg {
-          fill: none;
-          stroke: color-mix(in srgb, var(--fv-text) 18%, transparent);
-          stroke-width: 3;
-        }
-
-        .status-ring {
-          fill: none;
-          stroke: color-mix(in srgb, var(--success-color, #43e683) 82%, var(--fv-text) 18%);
-          stroke-width: 3;
-          stroke-linecap: round;
-          transition: stroke .4s ease;
-        }
-
-        .status-ring.warn {
-          stroke: color-mix(in srgb, var(--warning-color, #f2994a) 82%, var(--fv-text) 18%);
-        }
-
-        .status-ring.danger {
-          stroke: color-mix(in srgb, var(--error-color, #db4437) 82%, var(--fv-text) 18%);
-        }
-
-        .status-ring.info {
-          stroke: color-mix(in srgb, var(--info-color, #4aa3ff) 82%, var(--fv-text) 18%);
-        }
-
-        .badge-box {
-          fill: #808080;
-          fill-opacity: .6;
-          stroke: color-mix(in srgb, var(--fv-text) 35%, transparent);
-          stroke-width: 1.5;
-        }
-
-        .badge-icon-stroke {
-          stroke: var(--fv-text);
-          stroke-width: 2.4;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-        }
-
-        .badge-icon-fill {
-          fill: color-mix(in srgb, var(--fv-text) 65%, transparent);
-        }
-
-        .badge-icon-line {
-          stroke: var(--fv-background);
-          stroke-width: 1.6;
-          stroke-linecap: round;
-        }
-
-        .badge-value {
-          font-size: 10px;
-          font-weight: 750;
-          fill: var(--fv-text) !important;
-          paint-order: stroke;
-          stroke: color-mix(in srgb, var(--fv-background) 85%, transparent);
-          stroke-width: 3px;
-        }
-
-        .entity-hit {
-          cursor: pointer;
-        }
-
-        .entity-hit:focus-visible {
-          outline: 2px solid var(--fv-text);
-          outline-offset: 3px;
-        }
-      </style>
-
-      <ha-card>
-        <div class="card ${animationOff ? "no-animation" : ""}">
-          <svg viewBox="0 0 620 ${this._diagramHeight()}" role="img" aria-label="${this._t("unit")}">
-            <defs>
-              ${primaryLane.gradient}
-              ${chLane.gradient}
-              ${dhwLane.gradient}
-            </defs>
-
-            ${this._statusCircle("primary_cooling", this._t("cooling"), this._formatWithUnit("primary_cooling", 1, ""), coolingPairX, topRowY, "", false, this._coolingStatusRing("primary_cooling"), void 0, true, void 0, coolingDisplayRadius)}
-            ${hasFlow ? this._statusCircle("meter_flow", this._t("meter_flow_short"), this._formatFlowLitersPerHour("meter_flow"), flowX, topRowY, "", false, void 0, void 0, true, void 0, pairRadius) : ""}
-            ${this._statusCircle("standby", this._t("unit"), this._overallStatusText(), unitX, topRowY, "", true, this._overallRing(), void 0, false)}
-            ${this._statusCircle(sentioDisplayKey, this._t("sentio"), this._sentioStatusText(), sentioX, topRowY, "", true, this._sentioRing(), "16px")}
-            ${this._statusCircle(autoStandbyDisplayKey, this._t("auto_standby"), this._autoStandbyStatusText(), autoStandbyX, topRowY, "", true, this._autoStandbyRing(), "16px")}
-            ${this._statusCircle("pressure", this._t("pressure"), this._formatNumber("pressure", 2), pressureX, topRowY, "", false, this._pressureRing(), void 0, true, void 0, pressureRadius)}
-
-            ${laneBox(primarySides.leftKey, primarySides.leftLabel, 5, laneY1, "left")}
-            ${laneBox(primarySides.rightKey, primarySides.rightLabel, 515, laneY1, "right")}
-            ${primaryLane.markup}
-            ${this._laneBadgeSvg("meter_flow", 282, laneY1, "droplet", this._formatFlowLitersPerHour("meter_flow"))}
-            ${this._laneBadgeSvg("meter_power", 338, laneY1, "power", this._formatPowerKilowatts("meter_power"))}
-
-            ${laneBox(chSides.leftKey, chSides.leftLabel, 5, laneY2, "left")}
-            ${laneBox(chSides.rightKey, chSides.rightLabel, 515, laneY2, "right")}
-            ${chLane.markup}
-            ${this._laneBadgeSvg("ch_flow", 282, laneY2, "droplet", this._formatFlowLitersPerHour("ch_flow"))}
-            ${this._laneBadgeSvg("ch_power", 338, laneY2, "power", this._formatPowerKilowatts("ch_power"))}
-
-            ${laneBox(dhwSides.leftKey, dhwSides.leftLabel, 5, laneY3, "left")}
-            ${laneBox(dhwSides.rightKey, dhwSides.rightLabel, 515, laneY3, "right")}
-            ${dhwLane.markup}
-            ${bypassLoop}
-            ${this._laneBadgeSvg("dhw_flow", 282, laneY3, "droplet", this._formatFlowLitersPerHour("dhw_flow"))}
-            ${this._laneBadgeSvg("dhw_power", 338, laneY3, "power", this._formatPowerKilowatts("dhw_power"))}
-            ${bypassActive ? this._laneBadgeSvg("bvv_bypass_status", 310, bypassDipY, "pump", this._formatWithUnit("circulation_bypass_temp", 1, ""), this._temperatureColor(this._number("circulation_bypass_temp"))) : ""}
-
-            ${this._statusCircle("standby", this._t("standby"), this._isOn("standby") ? this._t("on") : this._t("off"), 130, bottomRowY, "", false, this._onOffRing("standby"))}
-            ${this._statusCircle("vacation", this._t("vacation"), this._isOn("vacation") ? this._t("on") : this._t("off"), 250, bottomRowY, "", false, this._onOffRing("vacation"))}
-            ${this._statusCircle("ch_pump", this._t("pump"), this._formatDisplayState("ch_pump"), 370, bottomRowY, "", false, this._onOffRing("ch_pump"))}
-            ${this._statusCircle("ch_outdoor", this._t("outdoor"), this._formatTemp("ch_outdoor"), 490, bottomRowY, "", false, this._temperatureRing("ch_outdoor"), "16px")}
-          </svg>
-        </div>
-      </ha-card>
-    `;
-		this.shadowRoot.querySelectorAll("[data-entity]").forEach((element) => {
-			element.addEventListener("click", () => this._fireMoreInfo(element.dataset.entity));
-			element.addEventListener("keydown", (event) => {
-				if (event.key === "Enter" || event.key === " ") {
-					event.preventDefault();
-					this._fireMoreInfo(element.dataset.entity);
-				}
-			});
-		});
-	}
-};
-var FjernvarmeCardEditor = class extends HTMLElement {
-	constructor() {
-		super();
-		this.attachShadow({ mode: "open" });
-		this._config = {};
-		this._schemaCache = void 0;
-	}
-	setConfig(config) {
-		this._config = config || {};
-		this._render();
-	}
-	set hass(hass) {
-		this._hass = hass;
-		this._render();
-	}
-	_formData() {
-		const entities = this._config?.entities || {};
-		const appearance = this._config?.appearance || {};
-		const thresholds = this._config?.temperature_thresholds || {};
-		const coolingTarget = this._config?.cooling_target || {};
-		return {
-			primary_supply: entities.primary_supply,
-			primary_return: entities.primary_return,
-			primary_cooling: entities.primary_cooling,
-			cooling_optimal: coolingTarget.optimal ?? 30,
-			cooling_tolerance: coolingTarget.tolerance ?? 5,
-			pressure: entities.pressure,
-			meter_energy_total: entities.meter_energy_total,
-			meter_volume_total: entities.meter_volume_total,
-			meter_flow: entities.meter_flow,
-			meter_power: entities.meter_power,
-			ch_supply: entities.ch_supply,
-			ch_return: entities.ch_return,
-			ch_valve: entities.ch_valve,
-			ch_flow: entities.ch_flow,
-			ch_power: entities.ch_power,
-			ch_outdoor: entities.ch_outdoor,
-			ch_pump: entities.ch_pump,
-			dhw_cold_in: entities.dhw_cold_in,
-			dhw_hot_out: entities.dhw_hot_out,
-			dhw_flow: entities.dhw_flow,
-			dhw_power: entities.dhw_power,
-			dhw_valve: entities.dhw_valve,
-			dhw_setpoint: entities.dhw_setpoint,
-			dhw_status: entities.dhw_status,
-			circulation_temp: entities.circulation_temp,
-			circulation_status: entities.circulation_status,
-			bvv_bypass_status: entities.bvv_bypass_status,
-			circulation_bypass_temp: entities.circulation_bypass_temp,
-			standby: entities.standby,
-			vacation: entities.vacation,
-			sentio_active: entities.sentio_active,
-			sentio_status: entities.sentio_status,
-			sentio_call_active: entities.sentio_call_active,
-			sentio_fejl: entities.sentio_fejl,
-			auto_standby_active: entities.auto_standby_active,
-			auto_standby_status: entities.auto_standby_status,
-			auto_standby_engaged: entities.auto_standby_engaged,
-			auto_standby_fejl: entities.auto_standby_fejl,
-			alarms: entities.alarms || [],
-			animation: appearance.animation !== false,
-			flow_animation: (appearance.flow_animation ?? appearance.animation) !== false,
-			show_labels: appearance.show_labels !== false,
-			show_temperatures: appearance.show_temperatures !== false,
-			compact: appearance.compact === true,
-			swap_sides: appearance.swap_sides !== false,
-			threshold_white: thresholds.white ?? 5,
-			threshold_blue: thresholds.blue ?? 20,
-			threshold_green: thresholds.green ?? 35,
-			threshold_yellow: thresholds.yellow ?? 45,
-			threshold_orange: thresholds.orange ?? 55,
-			threshold_red: thresholds.red ?? 65
-		};
-	}
-	_language() {
-		return (this._hass?.locale?.language || this._hass?.language || "en").toString().toLowerCase().startsWith("da") ? "da" : "en";
-	}
-	_t(key) {
-		const translations = {
-			en: {
-				primary: "District heating (primary)",
-				primary_supply: "Primary supply (FJF)",
-				primary_return: "Primary return (FJR)",
-				primary_cooling: "Cooling / ΔT",
-				cooling_optimal: "Optimal cooling (ΔT)",
-				cooling_tolerance: "Normal range (+/-)",
-				pressure: "System pressure",
-				meter: "Billing meter",
-				meter_energy_total: "Total energy",
-				meter_volume_total: "Total volume",
-				meter_flow: "Current flow",
-				meter_flow_short: "Flow",
-				meter_power: "Current power",
-				meter_power_short: "Power",
-				ch: "Central heating (radiators)",
-				ch_supply: "Radiator supply (CVV frem)",
-				ch_return: "Radiator return (CVV retur)",
-				ch_valve: "Radiator valve position",
-				ch_flow: "Radiator flow",
-				ch_power: "Radiator power",
-				ch_outdoor: "Outdoor temperature",
-				ch_pump: "Heating pump status",
-				dhw: "Domestic hot water",
-				dhw_cold_in: "Cold water in (KV)",
-				dhw_hot_out: "Hot water out (BV)",
-				dhw_flow: "DHW flow",
-				dhw_power: "DHW power",
-				dhw_valve: "DHW valve position",
-				dhw_setpoint: "DHW setpoint",
-				dhw_status: "DHW status",
-				circulation: "DHW circulation loop",
-				circulation_temp: "Circulation return temperature",
-				circulation_status: "Circulation pump status",
-				bvv_bypass_status: "DHW bypass status",
-				circulation_bypass_temp: "Circulation bypass temperature",
-				controls: "Controls & alarms",
-				standby: "Standby switch",
-				vacation: "Vacation switch",
-				alarms: "Alarm / fault entities",
-				appearance: "Appearance",
-				animation: "Animation",
-				flow_animation: "Flow animation",
-				show_labels: "Show labels",
-				show_temperatures: "Show temperatures",
-				compact: "Compact",
-				swap_sides: "Swap left/right (supply ↔ return)",
-				temperature_colors: "Temperature colors",
-				threshold_white: "White from",
-				threshold_blue: "Blue from",
-				threshold_green: "Green from",
-				threshold_yellow: "Yellow from",
-				threshold_orange: "Orange from",
-				threshold_red: "Red from"
-			},
-			da: {
-				primary: "Fjernvarme (primær)",
-				primary_supply: "Fjernvarme frem (FJF)",
-				primary_return: "Fjernvarme retur (FJR)",
-				primary_cooling: "Afkøling / ΔT",
-				cooling_optimal: "Optimal afkøling (ΔT)",
-				cooling_tolerance: "Normalområde (+/-)",
-				pressure: "Anlægstryk",
-				meter: "Afregningsmåler",
-				meter_energy_total: "Total energi",
-				meter_volume_total: "Total volumen",
-				meter_flow: "Aktuel flow",
-				meter_flow_short: "Flow",
-				meter_power: "Aktuel effekt",
-				meter_power_short: "Effekt",
-				ch: "Centralvarme (radiatorer)",
-				ch_supply: "Radiator frem (CVV frem)",
-				ch_return: "Radiator retur (CVV retur)",
-				ch_valve: "Radiatorventil position",
-				ch_flow: "Radiatorflow",
-				ch_power: "Radiatoreffekt",
-				ch_outdoor: "Udetemperatur",
-				ch_pump: "Varmepumpe status",
-				dhw: "Varmt brugsvand",
-				dhw_cold_in: "Koldt vand ind (KV)",
-				dhw_hot_out: "Varmt vand ud (BV)",
-				dhw_flow: "Brugsvandsflow",
-				dhw_power: "Brugsvandseffekt",
-				dhw_valve: "Brugsvandsventil position",
-				dhw_setpoint: "Brugsvand setpunkt",
-				dhw_status: "Brugsvand status",
-				circulation: "Cirkulation (varmt brugsvand)",
-				circulation_temp: "Cirkulation returtemperatur",
-				circulation_status: "Cirkulationspumpe status",
-				bvv_bypass_status: "BVV bypass status",
-				circulation_bypass_temp: "Cirkulation bypass temperatur",
-				controls: "Styring & alarmer",
-				standby: "Standby kontakt",
-				vacation: "Ferie kontakt",
-				alarms: "Alarm-/fejlenheder",
-				appearance: "Udseende",
-				animation: "Animation",
-				flow_animation: "Flow-animation",
-				show_labels: "Vis labels",
-				show_temperatures: "Vis temperaturer",
-				compact: "Kompakt",
-				swap_sides: "Byt om på venstre/højre (frem ↔ retur)",
-				temperature_colors: "Temperaturfarver",
-				threshold_white: "Hvid fra",
-				threshold_blue: "Blå fra",
-				threshold_green: "Grøn fra",
-				threshold_yellow: "Gul fra",
-				threshold_orange: "Orange fra",
-				threshold_red: "Rød fra"
-			}
-		};
-		return translations[this._language()]?.[key] || translations.en[key] || key;
-	}
-	_schema() {
-		return [
-			{
-				type: "expandable",
-				name: "primary",
-				title: this._t("primary"),
-				flatten: true,
-				icon: "mdi:transmission-tower",
-				schema: [
-					{
-						name: "primary_supply",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "primary_return",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "primary_cooling",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "cooling_optimal",
-						selector: { number: {
-							min: 0,
-							max: 80,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					},
-					{
-						name: "cooling_tolerance",
-						selector: { number: {
-							min: .5,
-							max: 40,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					},
-					{
-						name: "pressure",
-						selector: { entity: { domain: "sensor" } }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "meter",
-				title: this._t("meter"),
-				flatten: true,
-				icon: "mdi:counter",
-				schema: [
-					{
-						name: "meter_energy_total",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "meter_volume_total",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "meter_flow",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "meter_power",
-						selector: { entity: { domain: "sensor" } }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "ch",
-				title: this._t("ch"),
-				flatten: true,
-				icon: "mdi:radiator",
-				schema: [
-					{
-						name: "ch_supply",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "ch_return",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "ch_valve",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "ch_flow",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "ch_power",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "ch_outdoor",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "ch_pump",
-						selector: { entity: {} }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "dhw",
-				title: this._t("dhw"),
-				flatten: true,
-				icon: "mdi:water-thermometer",
-				schema: [
-					{
-						name: "dhw_cold_in",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "dhw_hot_out",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "dhw_flow",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "dhw_power",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "dhw_valve",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "dhw_setpoint",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "dhw_status",
-						selector: { entity: {} }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "circulation",
-				title: this._t("circulation"),
-				flatten: true,
-				icon: "mdi:pump",
-				schema: [
-					{
-						name: "circulation_bypass_temp",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "circulation_temp",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "circulation_status",
-						selector: { entity: {} }
-					},
-					{
-						name: "bvv_bypass_status",
-						selector: { entity: {} }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "controls",
-				title: this._t("controls"),
-				flatten: true,
-				icon: "mdi:alert-circle-outline",
-				schema: [
-					{
-						name: "standby",
-						selector: { entity: { domain: "switch" } }
-					},
-					{
-						name: "vacation",
-						selector: { entity: { domain: "switch" } }
-					},
-					{
-						name: "alarms",
-						selector: { entity: {
-							domain: "binary_sensor",
-							multiple: true
-						} }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "sentio",
-				title: this._t("sentio"),
-				flatten: true,
-				icon: "mdi:radiator",
-				schema: [
-					{
-						name: "sentio_active",
-						selector: { entity: { domain: "input_boolean" } }
-					},
-					{
-						name: "sentio_status",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "sentio_call_active",
-						selector: { entity: { domain: "input_boolean" } }
-					},
-					{
-						name: "sentio_fejl",
-						selector: { entity: { domain: "binary_sensor" } }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "auto_standby",
-				title: this._t("auto_standby"),
-				flatten: true,
-				icon: "mdi:radiator-disabled",
-				schema: [
-					{
-						name: "auto_standby_active",
-						selector: { entity: { domain: "switch" } }
-					},
-					{
-						name: "auto_standby_status",
-						selector: { entity: { domain: "sensor" } }
-					},
-					{
-						name: "auto_standby_engaged",
-						selector: { entity: { domain: "binary_sensor" } }
-					},
-					{
-						name: "auto_standby_fejl",
-						selector: { entity: { domain: "binary_sensor" } }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "temperature_colors",
-				title: this._t("temperature_colors"),
-				flatten: true,
-				icon: "mdi:palette-outline",
-				schema: [
-					{
-						name: "threshold_white",
-						selector: { number: {
-							min: -20,
-							max: 100,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					},
-					{
-						name: "threshold_blue",
-						selector: { number: {
-							min: -20,
-							max: 100,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					},
-					{
-						name: "threshold_green",
-						selector: { number: {
-							min: -20,
-							max: 100,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					},
-					{
-						name: "threshold_yellow",
-						selector: { number: {
-							min: -20,
-							max: 100,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					},
-					{
-						name: "threshold_orange",
-						selector: { number: {
-							min: -20,
-							max: 100,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					},
-					{
-						name: "threshold_red",
-						selector: { number: {
-							min: -20,
-							max: 100,
-							step: .5,
-							mode: "box",
-							unit_of_measurement: "°C"
-						} }
-					}
-				]
-			},
-			{
-				type: "expandable",
-				name: "appearance",
-				title: this._t("appearance"),
-				flatten: true,
-				icon: "mdi:palette",
-				schema: [
-					{
-						name: "flow_animation",
-						selector: { boolean: {} }
-					},
-					{
-						name: "show_labels",
-						selector: { boolean: {} }
-					},
-					{
-						name: "show_temperatures",
-						selector: { boolean: {} }
-					},
-					{
-						name: "compact",
-						selector: { boolean: {} }
-					},
-					{
-						name: "swap_sides",
-						selector: { boolean: {} }
-					}
-				]
-			}
-		];
-	}
-	_computeLabel(schema) {
-		return this._t(schema.name) || schema.title || schema.name;
-	}
-	_valueChanged(event) {
-		event.stopPropagation();
-		const value = event.detail.value || {};
-		const thresholdValue = (key, fallback) => {
-			const parsed = Number.parseFloat(value[key]);
-			return Number.isFinite(parsed) ? parsed : fallback;
-		};
-		const next = structuredClone(this._config || {});
-		next.entities = {
-			...next.entities || {},
-			primary_supply: value.primary_supply || void 0,
-			primary_return: value.primary_return || void 0,
-			primary_cooling: value.primary_cooling || void 0,
-			pressure: value.pressure || void 0,
-			meter_energy_total: value.meter_energy_total || void 0,
-			meter_volume_total: value.meter_volume_total || void 0,
-			meter_flow: value.meter_flow || void 0,
-			meter_power: value.meter_power || void 0,
-			ch_supply: value.ch_supply || void 0,
-			ch_return: value.ch_return || void 0,
-			ch_valve: value.ch_valve || void 0,
-			ch_flow: value.ch_flow || void 0,
-			ch_power: value.ch_power || void 0,
-			ch_outdoor: value.ch_outdoor || void 0,
-			ch_pump: value.ch_pump || void 0,
-			dhw_cold_in: value.dhw_cold_in || void 0,
-			dhw_hot_out: value.dhw_hot_out || void 0,
-			dhw_flow: value.dhw_flow || void 0,
-			dhw_power: value.dhw_power || void 0,
-			dhw_valve: value.dhw_valve || void 0,
-			dhw_setpoint: value.dhw_setpoint || void 0,
-			dhw_status: value.dhw_status || void 0,
-			circulation_temp: value.circulation_temp || void 0,
-			circulation_status: value.circulation_status || void 0,
-			bvv_bypass_status: value.bvv_bypass_status || void 0,
-			circulation_bypass_temp: value.circulation_bypass_temp || void 0,
-			standby: value.standby || void 0,
-			vacation: value.vacation || void 0,
-			sentio_active: value.sentio_active || void 0,
-			sentio_status: value.sentio_status || void 0,
-			sentio_call_active: value.sentio_call_active || void 0,
-			sentio_fejl: value.sentio_fejl || void 0,
-			auto_standby_active: value.auto_standby_active || void 0,
-			auto_standby_status: value.auto_standby_status || void 0,
-			auto_standby_engaged: value.auto_standby_engaged || void 0,
-			auto_standby_fejl: value.auto_standby_fejl || void 0,
-			alarms: Array.isArray(value.alarms) ? value.alarms : []
-		};
-		next.temperature_thresholds = {
-			...next.temperature_thresholds || {},
-			white: thresholdValue("threshold_white", 5),
-			blue: thresholdValue("threshold_blue", 20),
-			green: thresholdValue("threshold_green", 35),
-			yellow: thresholdValue("threshold_yellow", 45),
-			orange: thresholdValue("threshold_orange", 55),
-			red: thresholdValue("threshold_red", 65)
-		};
-		next.cooling_target = {
-			...next.cooling_target || {},
-			optimal: thresholdValue("cooling_optimal", 30),
-			tolerance: thresholdValue("cooling_tolerance", 5)
-		};
-		next.appearance = {
-			...next.appearance || {},
-			flow_animation: value.flow_animation !== false,
-			show_labels: value.show_labels !== false,
-			show_temperatures: value.show_temperatures !== false,
-			compact: value.compact === true,
-			swap_sides: value.swap_sides !== false
-		};
-		Object.keys(next.entities).forEach((key) => {
-			if (next.entities[key] === void 0) delete next.entities[key];
-		});
-		Object.keys(next.appearance).forEach((key) => {
-			if (next.appearance[key] === void 0) delete next.appearance[key];
-		});
-		this.dispatchEvent(new CustomEvent("config-changed", {
-			detail: { config: next },
-			bubbles: true,
-			composed: true
-		}));
-	}
-	_render() {
-		if (!this.shadowRoot) return;
-		let form = this.shadowRoot.querySelector("ha-form");
-		if (!form) {
-			this.shadowRoot.innerHTML = `
-        <style>
-          ha-form {
-            display: block;
-          }
-        </style>
-        <ha-form></ha-form>
-      `;
-			form = this.shadowRoot.querySelector("ha-form");
-			form.computeLabel = (schema) => this._computeLabel(schema);
-			form.addEventListener("value-changed", (event) => this._valueChanged(event));
-		}
-		const schemaCacheKey = `${this._language()}:0.26.2-aligned-status-values`;
-		if (!this._schemaCache || this._schemaCacheKey !== schemaCacheKey) {
-			this._schemaCache = this._schema();
-			this._schemaCacheKey = schemaCacheKey;
-		}
-		form.schema = this._schemaCache;
-		form.hass = this._hass;
-		form.data = this._formData();
-	}
-};
-if (!customElements.get("fjernvarme-card")) customElements.define("fjernvarme-card", FjernvarmeCard);
-if (!customElements.get("fjernvarme-card-editor")) customElements.define("fjernvarme-card-editor", FjernvarmeCardEditor);
-window.customCards = window.customCards || [];
-window.customCards.push({
-	type: "fjernvarme-card",
-	name: "Fjernvarme Card",
-	description: "Animated district heating substation card (Wavin Calefa / Kamstrup style).",
-	preview: true
-});
-window.__FJERNVARME_CARD_VERSION__ = "0.27.0-flow-beside-delta";
-console.info("%c Fjernvarme Card %c loaded v0.1.0 ", "color: white; background: #1976d2; font-weight: 700; padding: 2px 4px; border-radius: 3px 0 0 3px;", "color: white; background: #d32f2f; font-weight: 700; padding: 2px 4px; border-radius: 0 3px 3px 0;");
-//#endregion
+if(!customElements.get("ha-fjernvarme-house-card"))customElements.define("ha-fjernvarme-house-card",HAFjernvarmeHouseCard);
+if(!customElements.get("ha-fjernvarme-house-card-editor"))customElements.define("ha-fjernvarme-house-card-editor",HAFjernvarmeHouseCardEditor);
+window.customCards=window.customCards||[];window.customCards.push({type:"ha-fjernvarme-house-card",name:"HA Fjernvarme House Card",description:"Fjernvarmeunit med temperaturstyrede rør, radiator, varmt vand og bypass",preview:true});
+console.info(`%c HA-FJERNVARME-HOUSE-CARD %c ${VERSION} `,"color:#fff;background:#bb433f;font-weight:700","color:#bb433f;background:#fff");

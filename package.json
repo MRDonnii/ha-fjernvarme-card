@@ -1,16 +1,11 @@
 {
   "name": "ha-fjernvarme-card",
-  "version": "0.26.2",
-  "description": "Animated Home Assistant Lovelace card for a district heating (fjernvarme) substation unit.",
+  "version": "0.1.49",
+  "description": "Home Assistant Lovelace card for a district heating (fjernvarme) unit — house-diagram layout with animated pipes.",
   "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/MRDonnii/ha-fjernvarme-card.git"
-  },
-  "scripts": {
-    "build": "vite build",
-    "dev": "vite build --watch",
-    "check": "tsc --noEmit"
   },
   "keywords": [
     "home-assistant",
@@ -26,10 +21,5 @@
     "kamstrup"
   ],
   "author": "John Thorn Halle",
-  "license": "MIT",
-  "devDependencies": {
-    "@vitejs/plugin-legacy": "latest",
-    "typescript": "latest",
-    "vite": "latest"
-  }
+  "license": "MIT"
 }

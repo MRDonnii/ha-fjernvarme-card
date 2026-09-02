@@ -1,25 +1,17 @@
 # Fjernvarme Card
 
-An animated Home Assistant Lovelace card for a district heating (fjernvarme) substation
-unit, built around the entity layout exposed by Wavin Calefa / Sentio units and a
-Kamstrup wireless M-Bus billing meter — but any set of matching sensors will work.
+A Home Assistant Lovelace card for a district heating (fjernvarme) unit, built around the
+entity layout exposed by Wavin Calefa / Sentio units and a Kamstrup wireless M-Bus billing
+meter — but any set of matching sensors will work.
 
-The card shows three animated pipe "lanes":
+The card is a house-diagram layout: a left "FJERNVARMENET" column shows the primary
+district-heating supply/return pipes plus the cooling (ΔT) and flow readings between them,
+while the right "INDE I HUSET" area shows the radiator circuit, domestic hot water, and
+outdoor temperature. Pipes animate only while there's actual flow, and the house interior
+carries a constant warm tint. An optional details strip along the bottom breaks out
+Fjernvarme / Radiator / Varmt vand metrics in more depth.
 
-- **Primary / district heating** (supply and return from the utility)
-- **Central heating** (radiator supply/return)
-- **Domestic hot water** (cold in / hot out)
-
-Each pipe's color runs along a configurable temperature gradient (from a "cold" color to
-a "hot" color) and animates only while there's actual flow — a stopped/idle circuit
-renders as a plain gray pipe. Status circles across the top and bottom show unit health
-(alarms, pressure, cooling/ΔT), pump/valve state, standby/vacation switches, and outdoor
-temperature, each with a color-coded ring.
-
-The DHW circulation/bypass loop (the recirculation line that keeps hot-water pipes warm)
-is drawn as a small loop tapped onto the domestic-hot-water pipe's own edge, rather than
-as a separate lane — unlike the main lanes, the loop itself only appears while the
-circulation pump is actually running; its status badge stays visible either way.
+Plain JavaScript, no build step — copy the file in and register it as a dashboard resource.
 
 ## Installation
 
@@ -41,19 +33,24 @@ circulation pump is actually running; its status badge stays visible either way.
 
 ## Usage
 
-Add the card via the dashboard editor (search for "Fjernvarme Card") or in YAML:
+Add the card via the dashboard editor (search for "Fjernvarme") or in YAML:
 
 ```yaml
-type: custom:fjernvarme-card
+type: custom:ha-fjernvarme-house-card
+title: Fjernvarme
+animation: true
+show_details: true
 entities:
   primary_supply: sensor.district_heating_supply_temperature
   primary_return: sensor.district_heating_return_temperature
+  primary_valve: sensor.district_heating_main_valve
   primary_cooling: sensor.district_heating_cooling
+  summer_cutoff: sensor.summer_cutoff_temperature
   pressure: sensor.system_pressure
+  meter_power: sensor.heat_meter_power
+  meter_flow: sensor.heat_meter_flow
   meter_energy_total: sensor.heat_meter_total_energy
   meter_volume_total: sensor.heat_meter_total_volume
-  meter_flow: sensor.heat_meter_flow
-  meter_power: sensor.heat_meter_power
   ch_supply: sensor.radiator_supply_temperature
   ch_return: sensor.radiator_return_temperature
   ch_valve: sensor.radiator_valve_position
@@ -70,8 +67,8 @@ entities:
   dhw_status: sensor.dhw_status
   circulation_temp: sensor.circulation_return_temperature
   circulation_status: sensor.circulation_pump_status
-  bvv_bypass_status: sensor.dhw_bypass_status
   circulation_bypass_temp: sensor.circulation_bypass_temperature
+  bvv_bypass_status: sensor.dhw_bypass_status
   standby: switch.unit_standby
   vacation: switch.unit_vacation
   sentio_active: input_boolean.heat_call_enabled
@@ -85,55 +82,34 @@ entities:
   alarms:
     - binary_sensor.low_pressure_warning
     - binary_sensor.sensor_failure
-appearance:
-  flow_animation: true
-  show_labels: true
-  show_temperatures: true
-  compact: false
-temperature_thresholds:
-  white: 5
-  blue: 20
-  green: 35
-  yellow: 45
-  orange: 55
-  red: 65
-cooling_target:
-  optimal: 30
-  tolerance: 5
 ```
 
-All `entities` keys are optional — any pipe, badge, or status circle whose entity isn't
-configured is simply omitted from the render. `alarms` accepts any list of
-`binary_sensor` entities; the "Enhed" (unit) circle turns red and reports a count when
-any of them are active.
+All `entities` keys are optional — any pipe, label, or metric whose entity isn't configured
+simply renders as `—`. `entities.alarms` accepts any list of `binary_sensor` entities; the
+header turns red and shows a count when any of them are active.
 
 ## Configuration reference
 
 | Key | Description |
 |---|---|
+| `title` | Card header text (default `Fjernvarme`) |
+| `animation` | Toggle the animated pipe flow (default `true`) |
+| `show_details` | Toggle the bottom Fjernvarme / Radiator / Varmt vand details strip (default `true`) |
 | `entities.primary_supply` / `primary_return` | District heating supply/return temperature |
-| `entities.primary_cooling` | Cooling / ΔT reading, also drives the AFKØLING circle's background gradient |
+| `entities.primary_valve` | Main district heating valve position |
+| `entities.primary_cooling` | Cooling / ΔT reading |
+| `entities.summer_cutoff` | Summer cut-off setpoint temperature |
 | `entities.pressure` | System pressure |
-| `cooling_target.optimal` / `tolerance` | The target ΔT (default 30°C) and +/- band (default 5°C) considered "normal" — the AFKØLING circle is green inside that band and fades to red the further outside it the reading sits, in either direction |
-| `entities.meter_energy_total` / `meter_volume_total` / `meter_flow` / `meter_power` | Billing meter totals plus current main flow and actual power; flow and power are shown as two icon-only center badges |
-| `entities.ch_supply` / `ch_return` / `ch_valve` / `ch_flow` / `ch_power` / `ch_outdoor` / `ch_pump` | Central heating (radiator) circuit; flow and power are shown as two icon-only center badges |
-| `entities.dhw_cold_in` / `dhw_hot_out` / `dhw_flow` / `dhw_power` / `dhw_valve` / `dhw_setpoint` / `dhw_status` | Domestic hot water circuit; flow and power are shown as two icon-only center badges |
+| `entities.meter_power` / `meter_flow` | Current power draw and flow rate |
+| `entities.meter_energy_total` / `meter_volume_total` | Billing meter totals |
+| `entities.ch_supply` / `ch_return` / `ch_valve` / `ch_flow` / `ch_power` / `ch_outdoor` / `ch_pump` | Central heating (radiator) circuit |
+| `entities.dhw_cold_in` / `dhw_hot_out` / `dhw_flow` / `dhw_power` / `dhw_valve` / `dhw_setpoint` / `dhw_status` | Domestic hot water circuit |
 | `entities.circulation_temp` / `circulation_status` / `circulation_bypass_temp` | DHW circulation/recirculation loop |
-| `entities.bvv_bypass_status` | Actual DHW/BVV bypass state; exclusively controls whether the bypass loop is shown and animated |
-| `entities.standby` / `vacation` | Switch entities shown as status circles |
-| `entities.sentio_active` | Optional: an `input_boolean` (or similar) toggling an external heat-call function. Retained for configuration compatibility, but its enabled/disabled state is not shown as operating status |
-| `entities.sentio_status` | Optional: a text sensor with diagnostic heat-call status. It does not override the actual call state shown on the card |
-| `entities.sentio_call_active` | Optional: an `input_boolean`/`binary_sensor` marking a call as currently in progress — controls the displayed heat-call state and colors the circle's ring |
-| `entities.sentio_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
-| `entities.auto_standby_active` | Optional: a `switch` toggling an automatic-standby function. Retained for configuration compatibility, but its enabled/disabled state is not shown as operating status |
-| `entities.auto_standby_status` | Optional: a text sensor with the automation's current status; this is the preferred displayed status |
-| `entities.auto_standby_engaged` | Optional: a `binary_sensor` marking that standby is currently being held by the automation — colors the circle's ring |
-| `entities.auto_standby_fejl` | Optional: a `binary_sensor` marking a fault — colors the circle's ring red |
-| `entities.alarms` | List of `binary_sensor` entities aggregated into the unit's alarm ring/count |
-| `appearance.flow_animation` | Toggle the animated flow dashes |
-| `appearance.show_labels` / `show_temperatures` | Toggle label/temperature text |
-| `appearance.compact` | Tighter padding for smaller card slots |
-| `temperature_thresholds.*` | Six-stop color scale (white/blue/green/yellow/orange/red) used for every temperature-driven color in the card |
+| `entities.bvv_bypass_status` | DHW/BVV bypass state |
+| `entities.standby` / `vacation` | Switch entities shown as status metrics |
+| `entities.sentio_active` / `sentio_status` / `sentio_call_active` / `sentio_fejl` | Optional external heat-call (Sentio-style) integration |
+| `entities.auto_standby_active` / `auto_standby_status` / `auto_standby_engaged` / `auto_standby_fejl` | Optional automatic-standby integration |
+| `entities.alarms` | List of `binary_sensor` entities aggregated into the header's alarm count |
 
 ## License
 
